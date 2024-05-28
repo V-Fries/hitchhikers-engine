@@ -3,6 +3,9 @@ name = "game_engine"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+validation_layers = []
+
 [dependencies]
 # Vulkan wrapper
 ash = "0.38.0"

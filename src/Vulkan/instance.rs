@@ -1,0 +1,75 @@
+use super::errors::ExtensionNotFound;
+#[cfg(feature = "validation_layers")]
+use super::validation_layers::VALIDATION_LAYERS;
+
+use ash::vk;
+
+use std::collections::HashSet;
+use std::ffi::{c_char, CStr};
+
+const ENGINE_NAME: &CStr =
+    unsafe { CStr::from_bytes_with_nul_unchecked(b"HitchHiker's Engine\0") };
+const ENGINE_VERSION: u32 = vk::make_api_version(0, 0, 0, 0);
+
+const REQUIRED_EXTENSIONS: &[&CStr] = &[
+    vk::KHR_PORTABILITY_ENUMERATION_NAME,
+    #[cfg(feature = "validation_layers")]
+        vk::EXT_DEBUG_UTILS_NAME,
+];
+
+pub fn create_instance(entry: &ash::Entry) -> anyhow::Result<ash::Instance> {
+    let available_extensions = get_set_of_available_extensions(entry)?;
+    let required_extensions = get_required_extensions(available_extensions)?;
+
+    let app_info = get_app_info();
+    let create_info = get_create_info(&required_extensions, &app_info);
+
+    Ok(unsafe { entry.create_instance(&create_info, None)? })
+}
+
+fn get_set_of_available_extensions(entry: &ash::Entry) -> anyhow::Result<HashSet<String>> {
+    unsafe { entry.enumerate_instance_extension_properties(None)? }
+        .into_iter()
+        .map::<anyhow::Result<String>, _>(|elem| {
+            Ok(elem.extension_name_as_c_str()?
+                .to_str()?
+                .to_string())
+        })
+        .collect()
+}
+
+fn get_required_extensions(available_extensions: HashSet<String>)
+                           -> anyhow::Result<Vec<*const c_char>> {
+    REQUIRED_EXTENSIONS
+        .iter()
+        .map::<anyhow::Result<*const c_char>, _>(|extension| {
+            if !available_extensions.contains(extension.to_str()?) {
+                Err(ExtensionNotFound::new(extension))?;
+            }
+            Ok(extension.as_ptr())
+        })
+        .collect()
+}
+
+fn get_app_info<'a>() -> vk::ApplicationInfo<'a> {
+    vk::ApplicationInfo::default()
+        .api_version(vk::API_VERSION_1_3)
+        .application_name(ENGINE_NAME)
+        .application_version(ENGINE_VERSION)
+        .engine_name(ENGINE_NAME)
+        .engine_version(ENGINE_VERSION)
+}
+
+fn get_create_info<'a>(required_extensions: &'a [*const c_char],
+                       app_info: &'a vk::ApplicationInfo)
+                       -> vk::InstanceCreateInfo<'a> {
+    #[allow(unused_mut)]
+        let mut create_info = vk::InstanceCreateInfo::default()
+        .application_info(app_info)
+        .flags(vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR)
+        .enabled_extension_names(required_extensions);
+    #[cfg(feature = "validation_layers")] {
+        create_info = create_info.enabled_layer_names(VALIDATION_LAYERS);
+    }
+    create_info
+}

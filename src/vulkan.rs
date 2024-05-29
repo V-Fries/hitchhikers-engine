@@ -1,17 +1,19 @@
 mod errors;
 
-use ash::vk;
-use std::collections::HashSet;
-use std::ffi::{c_char, CStr};
-use anyhow::Result;
-use ash::vk::ApplicationInfo;
-use errors::ExtensionNotFound;
+#[cfg(feature = "validation_layers")]
+mod validation_layers;
 
 #[cfg(feature = "validation_layers")]
 use validation_layers::*;
+use errors::ExtensionNotFound;
 
-#[cfg(feature = "validation_layers")]
-use errors::validation_layers::ValidationLayerNotFound;
+use ash::vk;
+use anyhow::Result;
+use ash::vk::ApplicationInfo;
+
+use std::collections::HashSet;
+use std::ffi::{c_char, CStr};
+
 
 const ENGINE_NAME: &CStr =
     unsafe { CStr::from_bytes_with_nul_unchecked(b"HitchHiker's Engine\0") };
@@ -21,11 +23,6 @@ const REQUIRED_EXTENSIONS: &[&CStr] = &[
     vk::KHR_PORTABILITY_ENUMERATION_NAME,
     #[cfg(feature = "validation_layers")]
         vk::EXT_DEBUG_UTILS_NAME,
-];
-
-#[cfg(feature = "validation_layers")]
-const VALIDATION_LAYERS: &[*const c_char] = &[
-    unsafe { CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0").as_ptr() },
 ];
 
 
@@ -60,18 +57,14 @@ impl Vulkan {
 }
 
 impl Drop for Vulkan {
-    #[cfg(feature = "validation_layers")]
     fn drop(&mut self) {
         unsafe {
-            ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)
-                .destroy_debug_utils_messenger(self.debug_messenger, None);
+            #[cfg(feature = "validation_layers")] {
+                ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)
+                    .destroy_debug_utils_messenger(self.debug_messenger, None);
+            }
             self.instance.destroy_instance(None);
         }
-    }
-
-    #[cfg(not(feature = "validation_layers"))]
-    fn drop(&mut self) {
-        unsafe { self.instance.destroy_instance(None) };
     }
 }
 
@@ -130,65 +123,4 @@ fn get_create_info<'a>(required_extensions: &'a [*const c_char],
         create_info = create_info.enabled_layer_names(VALIDATION_LAYERS);
     }
     create_info
-}
-
-#[cfg(feature = "validation_layers")]
-mod validation_layers {
-    use super::*;
-
-    pub fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
-        let available_layers = get_set_of_available_validation_layers(entry)?;
-
-        for layer in VALIDATION_LAYERS {
-            let layer = unsafe { CStr::from_ptr(*layer) };
-            if !available_layers.contains(layer.to_str()?) {
-                Err(ValidationLayerNotFound::new(layer))?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn get_set_of_available_validation_layers(entry: &ash::Entry)
-                                              -> Result<HashSet<String>> {
-        unsafe { entry.enumerate_instance_layer_properties()? }
-            .into_iter()
-            .map::<Result<String>, _>(|elem| {
-                Ok(elem.layer_name_as_c_str()?
-                    .to_str()?
-                    .to_string())
-            })
-            .collect()
-    }
-
-    pub fn setup_debug_messenger(entry: &ash::Entry, instance: &ash::Instance) -> Result<vk::DebugUtilsMessengerEXT> {
-        let create_info = get_debug_utils_messenger_create_info();
-        let debug_utils = ash::ext::debug_utils::Instance::new(entry, instance);
-        unsafe { Ok(debug_utils.create_debug_utils_messenger(&create_info, None)?) }
-    }
-
-    fn get_debug_utils_messenger_create_info<'a>() -> vk::DebugUtilsMessengerCreateInfoEXT<'a> {
-        vk::DebugUtilsMessengerCreateInfoEXT::default()
-            .message_severity(
-                vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::INFO
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR)
-            .message_type(
-                vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-                    | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                    | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE)
-            .pfn_user_callback(Some(debug_utils_messenger_callback))
-    }
-
-    unsafe extern "system" fn debug_utils_messenger_callback(
-        message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-        message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-        p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-        _p_user_data: *mut std::ffi::c_void,
-    ) -> vk::Bool32 {
-        let message = CStr::from_ptr((*p_callback_data).p_message);
-        println!("[Debug][{message_severity:?}][{message_type:?}]: {message:?}\n");
-        vk::FALSE
-    }
 }

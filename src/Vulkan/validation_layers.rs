@@ -1,16 +1,18 @@
 use super::errors::validation_layers::ValidationLayerNotFound;
 
 use ash::vk;
+use anyhow::Result;
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
+use crate::const_str_to_cstr;
 
 #[cfg(feature = "validation_layers")]
 pub const VALIDATION_LAYERS: &[*const c_char] = &[
-    unsafe { CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0").as_ptr() },
+    const_str_to_cstr!("VK_LAYER_KHRONOS_validation").as_ptr(),
 ];
 
-pub fn check_validation_layers(entry: &ash::Entry) -> anyhow::Result<()> {
+pub fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
     let available_layers = get_set_of_available_validation_layers(entry)?;
 
     for layer in VALIDATION_LAYERS {
@@ -19,15 +21,14 @@ pub fn check_validation_layers(entry: &ash::Entry) -> anyhow::Result<()> {
             Err(ValidationLayerNotFound::new(layer))?;
         }
     }
-
     Ok(())
 }
 
 fn get_set_of_available_validation_layers(entry: &ash::Entry)
-                                          -> anyhow::Result<HashSet<String>> {
+                                          -> Result<HashSet<String>> {
     unsafe { entry.enumerate_instance_layer_properties()? }
         .into_iter()
-        .map::<anyhow::Result<String>, _>(|elem| {
+        .map::<Result<String>, _>(|elem| {
             Ok(elem.layer_name_as_c_str()?
                 .to_str()?
                 .to_string())
@@ -35,7 +36,8 @@ fn get_set_of_available_validation_layers(entry: &ash::Entry)
         .collect()
 }
 
-pub fn setup_debug_messenger(entry: &ash::Entry, instance: &ash::Instance) -> anyhow::Result<vk::DebugUtilsMessengerEXT> {
+pub fn setup_debug_messenger(entry: &ash::Entry, instance: &ash::Instance)
+                             -> Result<vk::DebugUtilsMessengerEXT> {
     let create_info = get_debug_utils_messenger_create_info();
     let debug_utils = ash::ext::debug_utils::Instance::new(entry, instance);
     unsafe { Ok(debug_utils.create_debug_utils_messenger(&create_info, None)?) }

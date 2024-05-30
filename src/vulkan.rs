@@ -8,6 +8,7 @@ use validation_layers::*;
 use crate::vulkan::instance::create_instance;
 
 use anyhow::Result;
+use winit::raw_window_handle::RawDisplayHandle;
 
 pub struct Vulkan {
     entry: ash::Entry,
@@ -18,11 +19,11 @@ pub struct Vulkan {
 
 impl Vulkan {
     #[cfg(feature = "validation_layers")]
-    pub fn new() -> Result<Self> {
+    pub fn new(display_handle: RawDisplayHandle) -> Result<Self> {
         let entry = unsafe { ash::Entry::load()? };
 
         check_validation_layers(&entry)?;
-        let instance = create_instance(&entry)?;
+        let instance = create_instance(&entry, display_handle)?;
         let debug_messenger = setup_debug_messenger(&entry, &instance)
             .map_err(|err| {
                 unsafe { instance.destroy_instance(None) };
@@ -32,9 +33,9 @@ impl Vulkan {
     }
 
     #[cfg(not(feature = "validation_layers"))]
-    pub fn new() -> Result<Self> {
+    pub fn new(display_handle: RawDisplayHandle) -> Result<Self> {
         let entry = unsafe { ash::Entry::load()? };
-        let instance = create_instance(&entry)?;
+        let instance = create_instance(&entry, display_handle)?;
         Ok(Self { entry, instance })
     }
 }

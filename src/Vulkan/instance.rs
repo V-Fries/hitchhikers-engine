@@ -1,15 +1,14 @@
 use super::errors::ExtensionNotFound;
 #[cfg(feature = "validation_layers")]
 use super::validation_layers::VALIDATION_LAYERS;
+use crate::engine::{ENGINE_NAME_CSTR, ENGINE_VERSION};
 
 use ash::vk;
+use anyhow::Result;
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
-
-const ENGINE_NAME: &CStr =
-    unsafe { CStr::from_bytes_with_nul_unchecked(b"HitchHiker's Engine\0") };
-const ENGINE_VERSION: u32 = vk::make_api_version(0, 0, 0, 0);
+use winit::raw_window_handle::RawDisplayHandle;
 
 const REQUIRED_EXTENSIONS: &[&CStr] = &[
     vk::KHR_PORTABILITY_ENUMERATION_NAME,
@@ -17,9 +16,12 @@ const REQUIRED_EXTENSIONS: &[&CStr] = &[
         vk::EXT_DEBUG_UTILS_NAME,
 ];
 
-pub fn create_instance(entry: &ash::Entry) -> anyhow::Result<ash::Instance> {
+pub fn create_instance(entry: &ash::Entry,
+                       display_handle: RawDisplayHandle)
+                       -> Result<ash::Instance> {
     let available_extensions = get_set_of_available_extensions(entry)?;
-    let required_extensions = get_required_extensions(available_extensions)?;
+    let required_extensions = get_required_extensions(available_extensions,
+                                                      display_handle)?;
 
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
@@ -27,10 +29,10 @@ pub fn create_instance(entry: &ash::Entry) -> anyhow::Result<ash::Instance> {
     Ok(unsafe { entry.create_instance(&create_info, None)? })
 }
 
-fn get_set_of_available_extensions(entry: &ash::Entry) -> anyhow::Result<HashSet<String>> {
+fn get_set_of_available_extensions(entry: &ash::Entry) -> Result<HashSet<String>> {
     unsafe { entry.enumerate_instance_extension_properties(None)? }
         .into_iter()
-        .map::<anyhow::Result<String>, _>(|elem| {
+        .map::<Result<String>, _>(|elem| {
             Ok(elem.extension_name_as_c_str()?
                 .to_str()?
                 .to_string())
@@ -38,25 +40,28 @@ fn get_set_of_available_extensions(entry: &ash::Entry) -> anyhow::Result<HashSet
         .collect()
 }
 
-fn get_required_extensions(available_extensions: HashSet<String>)
-                           -> anyhow::Result<Vec<*const c_char>> {
-    REQUIRED_EXTENSIONS
+fn get_required_extensions(available_extensions: HashSet<String>,
+                           display_handle: RawDisplayHandle)
+                           -> Result<Vec<*const c_char>> {
+    let mut result = REQUIRED_EXTENSIONS
         .iter()
-        .map::<anyhow::Result<*const c_char>, _>(|extension| {
+        .map::<Result<*const c_char>, _>(|extension| {
             if !available_extensions.contains(extension.to_str()?) {
                 Err(ExtensionNotFound::new(extension))?;
             }
             Ok(extension.as_ptr())
         })
-        .collect()
+        .collect::<Result<Vec<*const c_char>>>()?;
+    result.extend(ash_window::enumerate_required_extensions(display_handle)?);
+    Ok(result)
 }
 
 fn get_app_info<'a>() -> vk::ApplicationInfo<'a> {
     vk::ApplicationInfo::default()
         .api_version(vk::API_VERSION_1_3)
-        .application_name(ENGINE_NAME)
+        .application_name(ENGINE_NAME_CSTR)
         .application_version(ENGINE_VERSION)
-        .engine_name(ENGINE_NAME)
+        .engine_name(ENGINE_NAME_CSTR)
         .engine_version(ENGINE_VERSION)
 }
 

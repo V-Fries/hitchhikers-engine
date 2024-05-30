@@ -1,3 +1,3 @@
 debug:
-	cargo run --features validation_layers
+	RUST_BACKTRACE=1 cargo run --features validation_layers
 .PHONY: debug

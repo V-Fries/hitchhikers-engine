@@ -1,8 +1,17 @@
 mod vulkan;
+mod engine;
+mod utils;
 
-use vulkan::Vulkan;
+use engine::Engine;
 
-fn main() -> anyhow::Result<()> {
-    let vulkan_instance = Vulkan::new()?;
-    Ok(())
+use winit::error::EventLoopError;
+use winit::event_loop::{ControlFlow, EventLoop};
+
+fn main() -> Result<(), EventLoopError> {
+    let event_loop = EventLoop::new()?;
+    event_loop.set_control_flow(ControlFlow::Poll);
+
+    let mut engine = Engine::default();
+
+    event_loop.run_app(&mut engine)
 }

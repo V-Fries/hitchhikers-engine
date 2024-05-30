@@ -28,6 +28,24 @@ impl ExtensionNotFound {
     }
 }
 
+
+pub struct NoSuitablePhysicalDevice;
+
+impl Debug for NoSuitablePhysicalDevice {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Could not find any suitable physical device")
+    }
+}
+
+impl Display for NoSuitablePhysicalDevice {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl Error for NoSuitablePhysicalDevice {}
+
+
 #[cfg(feature = "validation_layers")]
 pub mod validation_layers {
     use super::*;

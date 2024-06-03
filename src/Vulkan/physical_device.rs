@@ -1,7 +1,7 @@
 use super::errors::{NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitable};
 
 use ash::vk;
-use anyhow::Result;
+use crate::utils::Result;
 
 #[derive(Ord, Eq, PartialEq, PartialOrd)]
 struct DeviceScore(u32);

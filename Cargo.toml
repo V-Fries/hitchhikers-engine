@@ -13,6 +13,3 @@ ash = "0.38.0"
 # Window
 winit = "0.30.0"
 ash-window = "0.13.0"
-
-# Error boilerplate
-anyhow = "1.0.86"

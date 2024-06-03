@@ -1,7 +1,6 @@
 macro_rules! error_struct {
     ($struct_name:ident $( { $( $field_name:ident : $field_type:ty ),* $(,)? } )?,
      $format_message:expr $(, $( $format_var:ident ), * $(,)? )?) => {
-        #[derive(std::fmt::Debug)]
         pub struct $struct_name {
             $( $( $field_name : $field_type ),*, )?
         }
@@ -18,6 +17,12 @@ macro_rules! error_struct {
         impl std::fmt::Display for $struct_name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, $format_message $(, $( self.$format_var ), * )?)
+            }
+        }
+
+        impl std::fmt::Debug for $struct_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{self}")
             }
         }
 

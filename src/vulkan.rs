@@ -8,6 +8,7 @@ mod physical_device;
 use validation_layers::*;
 use crate::vulkan::instance::create_instance;
 
+use ash::vk;
 use anyhow::Result;
 use winit::raw_window_handle::RawDisplayHandle;
 use crate::vulkan::physical_device::get_physical_device;
@@ -16,8 +17,8 @@ pub struct Vulkan {
     entry: ash::Entry,
     instance: ash::Instance,
     #[cfg(feature = "validation_layers")]
-    debug_messenger: ash::vk::DebugUtilsMessengerEXT,
-    physical_device: ash::vk::PhysicalDevice,
+    debug_messenger: vk::DebugUtilsMessengerEXT,
+    physical_device: vk::PhysicalDevice,
 }
 
 impl Vulkan {
@@ -35,7 +36,7 @@ impl Vulkan {
                 err
             })?;
 
-        let physical_device = get_physical_device(&instance)
+        let (physical_device, _queue_families) = get_physical_device(&instance)
             .map_err(|err| unsafe {
                 ash::ext::debug_utils::Instance::new(&entry, &instance)
                     .destroy_debug_utils_messenger(debug_messenger, None);
@@ -52,7 +53,7 @@ impl Vulkan {
 
         let instance = create_instance(&entry, display_handle)?;
 
-        let physical_device = get_physical_device(&instance)
+        let (physical_device, _queue_families) = get_physical_device(&instance)
             .map_err(|err| unsafe {
                 instance.destroy_instance(None);
                 err

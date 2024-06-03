@@ -1,4 +1,4 @@
-use super::errors::validation_layers::ValidationLayerNotFound;
+use super::errors::ValidationLayerNotFound;
 
 use ash::vk;
 use anyhow::Result;

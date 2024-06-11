@@ -32,7 +32,7 @@ pub fn create_instance(entry: &ash::Entry,
 fn get_set_of_available_extensions(entry: &ash::Entry) -> Result<HashSet<String>> {
     unsafe { entry.enumerate_instance_extension_properties(None)? }
         .into_iter()
-        .map::<Result<String>, _>(|elem| {
+        .map(|elem| {
             Ok(elem.extension_name_as_c_str()?
                 .to_str()?
                 .to_string())
@@ -45,7 +45,7 @@ fn get_required_extensions(available_extensions: HashSet<String>,
                            -> Result<Vec<*const c_char>> {
     let mut result = REQUIRED_EXTENSIONS
         .iter()
-        .map::<Result<*const c_char>, _>(|extension| {
+        .map(|extension| {
             if !available_extensions.contains(extension.to_str()?) {
                 Err(ExtensionNotFound::new(extension))?;
             }

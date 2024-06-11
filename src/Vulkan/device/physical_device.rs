@@ -1,7 +1,11 @@
-use super::errors::{NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitable};
+use std::collections::HashSet;
+use std::ffi::CStr;
+use crate::vulkan::errors::{NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitable};
 
 use ash::vk;
+
 use crate::utils::Result;
+use super::device::REQUIRED_EXTENSIONS;
 
 #[derive(Ord, Eq, PartialEq, PartialOrd)]
 struct DeviceScore(u32);
@@ -20,14 +24,15 @@ pub struct QueueFamiliesBuilder {
 impl QueueFamiliesBuilder {
     fn build(&self) -> Result<QueueFamilies> {
         Ok(QueueFamilies {
-            graphics_index: self.graphics_index.ok_or(PhysicalDeviceIsNotSuitable::new())?
+            graphics_index: self.graphics_index.ok_or(PhysicalDeviceIsNotSuitable::new())? as u32
         })
     }
 }
 
 pub struct QueueFamilies {
-    graphics_index: usize,
+    pub graphics_index: u32,
 }
+
 
 pub fn get_physical_device(instance: &ash::Instance)
                            -> Result<(vk::PhysicalDevice, QueueFamilies)> {
@@ -47,18 +52,49 @@ fn get_scored_device(instance: &ash::Instance,
     let device_features = unsafe { instance.get_physical_device_features(device) };
     let queue_families = find_queue_families(instance, device)?;
 
-    check_device_suitability()?;
+    check_device_suitability(instance, device)?;
 
     let score = score_device(device_properties, device_features);
 
     Ok(ScoredDevice { device, queue_families, score })
 }
 
-fn check_device_suitability() -> Result<()> {
-    // TODO evaluate device suitability (see example below)
-    // if device_features.geometry_shader == 0 {
-    //     return Err(NoSuitablePhysicalDevice::new().into());
-    // }
+fn check_device_suitability(instance: &ash::Instance,
+                            device: vk::PhysicalDevice)
+                            -> Result<()> {
+    check_device_available_extensions(instance, device)
+}
+
+fn get_set_of_available_device_extensions(instance: &ash::Instance,
+                                          device: vk::PhysicalDevice)
+                                          -> Result<HashSet<String>> {
+    unsafe { instance.enumerate_device_extension_properties(device) }?
+        .into_iter()
+        .map(|properties| {
+            Ok(properties.extension_name_as_c_str()?
+                .to_str()?
+                .to_string())
+        })
+        .collect()
+}
+
+fn check_device_available_extensions(instance: &ash::Instance,
+                                     device: vk::PhysicalDevice)
+                                     -> Result<()> {
+    let set_of_available_extensions = get_set_of_available_device_extensions(instance,
+                                                                             device)?;
+    let all_required_extensions_are_available = REQUIRED_EXTENSIONS
+        .iter()
+        .all(|extension| {
+            let Ok(extension) = unsafe { CStr::from_ptr(*extension) }.to_str() else {
+                return false;
+            };
+            set_of_available_extensions.contains(extension)
+        });
+
+    if !all_required_extensions_are_available {
+        Err(PhysicalDeviceIsNotSuitable::new())?;
+    }
     Ok(())
 }
 

@@ -2,23 +2,21 @@ mod errors;
 #[cfg(feature = "validation_layers")]
 mod validation_layers;
 mod instance;
-mod physical_device;
+mod device;
 
 #[cfg(feature = "validation_layers")]
 use validation_layers::*;
 use crate::vulkan::instance::create_instance;
 
-use ash::vk;
 use crate::utils::Result;
 use winit::raw_window_handle::RawDisplayHandle;
-use crate::vulkan::physical_device::get_physical_device;
 
 pub struct Vulkan {
     entry: ash::Entry,
     instance: ash::Instance,
     #[cfg(feature = "validation_layers")]
-    debug_messenger: vk::DebugUtilsMessengerEXT,
-    physical_device: vk::PhysicalDevice,
+    debug_messenger: ash::vk::DebugUtilsMessengerEXT,
+    device: ash::Device,
 }
 
 impl Vulkan {
@@ -36,7 +34,7 @@ impl Vulkan {
                 err
             })?;
 
-        let (physical_device, _queue_families) = get_physical_device(&instance)
+        let device = device::create_device(&instance)
             .map_err(|err| unsafe {
                 ash::ext::debug_utils::Instance::new(&entry, &instance)
                     .destroy_debug_utils_messenger(debug_messenger, None);
@@ -44,7 +42,7 @@ impl Vulkan {
                 err
             })?;
 
-        Ok(Self { entry, instance, debug_messenger, physical_device })
+        Ok(Self { entry, instance, debug_messenger, device })
     }
 
     #[cfg(not(feature = "validation_layers"))]
@@ -53,19 +51,20 @@ impl Vulkan {
 
         let instance = create_instance(&entry, display_handle)?;
 
-        let (physical_device, _queue_families) = get_physical_device(&instance)
+        let device = device::create_device(&instance)
             .map_err(|err| unsafe {
                 instance.destroy_instance(None);
                 err
             })?;
 
-        Ok(Self { entry, instance, physical_device })
+        Ok(Self { entry, instance, device })
     }
 }
 
 impl Drop for Vulkan {
     fn drop(&mut self) {
         unsafe {
+            self.device.destroy_device(None);
             #[cfg(feature = "validation_layers")] {
                 ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)
                     .destroy_debug_utils_messenger(self.debug_messenger, None);

@@ -17,6 +17,7 @@ pub struct Vulkan {
     #[cfg(feature = "validation_layers")]
     debug_messenger: ash::vk::DebugUtilsMessengerEXT,
     device: ash::Device,
+    graphics_queue: ash::vk::Queue,
 }
 
 impl Vulkan {
@@ -34,7 +35,7 @@ impl Vulkan {
                 err
             })?;
 
-        let device = device::create_device(&instance)
+        let (device, graphics_queue) = device::create_device(&instance)
             .map_err(|err| unsafe {
                 ash::ext::debug_utils::Instance::new(&entry, &instance)
                     .destroy_debug_utils_messenger(debug_messenger, None);
@@ -42,7 +43,7 @@ impl Vulkan {
                 err
             })?;
 
-        Ok(Self { entry, instance, debug_messenger, device })
+        Ok(Self { entry, instance, debug_messenger, device, graphics_queue })
     }
 
     #[cfg(not(feature = "validation_layers"))]
@@ -51,13 +52,13 @@ impl Vulkan {
 
         let instance = create_instance(&entry, display_handle)?;
 
-        let device = device::create_device(&instance)
+        let (device, graphics_queue) = device::create_device(&instance)
             .map_err(|err| unsafe {
                 instance.destroy_instance(None);
                 err
             })?;
 
-        Ok(Self { entry, instance, device })
+        Ok(Self { entry, instance, device, graphics_queue })
     }
 }
 

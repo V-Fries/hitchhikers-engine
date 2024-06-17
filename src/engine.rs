@@ -5,7 +5,7 @@ use ash::vk;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
-use winit::raw_window_handle::{HasDisplayHandle};
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::{Window, WindowId};
 
 use std::ffi::CStr;
@@ -33,7 +33,9 @@ impl ApplicationHandler for Engine {
             .expect("Failed to create window"));
         let display_handle = unsafe { self.window.as_ref().unwrap_unchecked() }
             .display_handle().expect("Failed to get display handle from window");
-        self.vulkan = Some(Vulkan::new(display_handle.into())
+        let window_handle = unsafe { self.window.as_ref().unwrap_unchecked() }
+            .window_handle().expect("Failed to get window handle");
+        self.vulkan = Some(Vulkan::new(display_handle.into(), window_handle.into())
             .expect("Failed to init vulkan"));
     }
 

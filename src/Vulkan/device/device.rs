@@ -1,37 +1,50 @@
 use std::ffi::{c_char};
 use ash::vk;
 
-use super::physical_device::{get_physical_device, QueueFamilies};
+use super::physical_device::{get_physical_device};
 use crate::utils::Result;
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
     vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr(),
 ];
 
-pub fn create_device(instance: &ash::Instance)
-                     -> Result<(ash::Device, vk::Queue)> {
-    let (physical_device, queue_families) = get_physical_device(instance)?;
+pub struct Queues {
+    pub graphics_queue: vk::Queue,
+    pub present_queue: vk::Queue,
+}
+
+pub fn create_device(entry: &ash::Entry,
+                     instance: &ash::Instance,
+                     surface: vk::SurfaceKHR)
+                     -> Result<(ash::Device, Queues)> {
+    let (physical_device, queue_families) = get_physical_device(entry, instance, surface)?;
 
     let queue_priority = [1.];
-    let graphics_queue_create_info = get_device_queue_create_info(&queue_families,
-                                                                  &queue_priority);
+    let queue_create_infos: Vec<_> = queue_families.as_vec_of_unique_indexes()
+        .into_iter()
+        .map(|index| {
+            get_device_queue_create_info(index, &queue_priority)
+        })
+        .collect();
+
     let device_features = get_device_features();
-    let queue_create_infos = [graphics_queue_create_info];
     let device_create_info = get_device_create_info(&queue_create_infos,
                                                     &device_features);
 
     unsafe {
         let device = instance.create_device(physical_device, &device_create_info, None)?;
         let graphics_queue = device.get_device_queue(queue_families.graphics_index, 0);
-        Ok((device, graphics_queue))
+        let present_queue = device.get_device_queue(queue_families.graphics_index, 0);
+        let queues = Queues { graphics_queue, present_queue };
+        Ok((device, queues))
     }
 }
 
-fn get_device_queue_create_info<'a>(queue_families: &QueueFamilies,
-                                queue_priority: &'a [f32])
-                                -> vk::DeviceQueueCreateInfo<'a> {
+fn get_device_queue_create_info(queue_index: u32,
+                                queue_priority: &[f32])
+                                -> vk::DeviceQueueCreateInfo {
     vk::DeviceQueueCreateInfo::default()
-        .queue_family_index(queue_families.graphics_index)
+        .queue_family_index(queue_index)
         .queue_priorities(queue_priority)
 }
 

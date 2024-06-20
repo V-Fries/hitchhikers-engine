@@ -37,8 +37,10 @@ error_struct!(ExtensionNotFound {
 error_struct!(NoSuitablePhysicalDevice,
               "Could not find any suitable physical device");
 
-error_struct!(PhysicalDeviceIsNotSuitable,
-              "Physical device is not suitable");
+error_struct!(PhysicalDeviceIsNotSuitable {
+    device: ash::vk::PhysicalDevice,
+    reason: String,
+}, "Physical device {:?} is not suitable: {}", device, reason);
 
 #[cfg(feature = "validation_layers")]
 error_struct!(ValidationLayerNotFound {

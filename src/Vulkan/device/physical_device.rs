@@ -23,15 +23,20 @@ pub struct QueueFamiliesBuilder {
 }
 
 impl QueueFamiliesBuilder {
-    fn build(&self) -> Result<QueueFamilies> {
-        let option_to_u32 = |option: Option<usize>|
+    fn build(&self, device: vk::PhysicalDevice) -> Result<QueueFamilies> {
+        let option_to_u32 = |option: Option<usize>, queue_name: &str|
                              -> Result<u32, PhysicalDeviceIsNotSuitable> {
-            Ok(option.ok_or(PhysicalDeviceIsNotSuitable::new())? as u32)
+            let index = option
+                .ok_or(PhysicalDeviceIsNotSuitable::new(
+                    device,
+                    format!("{queue_name} queue is not supported"),
+                ))?;
+            Ok(index as u32)
         };
 
         Ok(QueueFamilies {
-            graphics_index: option_to_u32(self.graphics_index)?,
-            present_index: option_to_u32(self.present_index)?,
+            graphics_index: option_to_u32(self.graphics_index, "graphics")?,
+            present_index: option_to_u32(self.present_index, "present")?,
         })
     }
 }
@@ -57,7 +62,13 @@ pub fn get_physical_device(entry: &ash::Entry,
     unsafe { instance.enumerate_physical_devices()? }
         .into_iter()
         .filter_map(|device| {
-            get_scored_device(entry, instance, surface, device).ok()
+            match get_scored_device(entry, instance, surface, device) {
+                Ok(scored_device) => Some(scored_device),
+                Err(err) => {
+                    eprintln!("Failed to score device {device:?}: {err}");
+                    None
+                }
+            }
         })
         .max_by(|left, right| { left.score.cmp(&right.score) })
         .map(|scores_device| (scores_device.device, scores_device.queue_families))
@@ -103,17 +114,14 @@ fn check_device_available_extensions(instance: &ash::Instance,
                                      -> Result<()> {
     let set_of_available_extensions = get_set_of_available_device_extensions(instance,
                                                                              device)?;
-    let all_required_extensions_are_available = REQUIRED_EXTENSIONS
-        .iter()
-        .all(|extension| {
-            let Ok(extension) = unsafe { CStr::from_ptr(*extension) }.to_str() else {
-                return false;
-            };
-            set_of_available_extensions.contains(extension)
-        });
-
-    if !all_required_extensions_are_available {
-        Err(PhysicalDeviceIsNotSuitable::new())?;
+    for extension in REQUIRED_EXTENSIONS.iter() {
+        let extension = unsafe { CStr::from_ptr(*extension) }.to_str()?;
+        if !set_of_available_extensions.contains(extension) {
+            Err(PhysicalDeviceIsNotSuitable::new(
+                device,
+                format!("extension {extension} is not supported"),
+            ))?;
+        }
     }
     Ok(())
 }
@@ -153,5 +161,5 @@ fn find_queue_families(entry: &ash::Entry,
 
             Ok(acc)
         })?
-        .build()
+        .build(device)
 }

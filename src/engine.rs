@@ -31,12 +31,19 @@ impl ApplicationHandler for Engine {
             .with_title(ENGINE_NAME);
         self.window = Some(event_loop.create_window(window_attributes)
             .expect("Failed to create window"));
-        let display_handle = unsafe { self.window.as_ref().unwrap_unchecked() }
-            .display_handle().expect("Failed to get display handle from window");
-        let window_handle = unsafe { self.window.as_ref().unwrap_unchecked() }
-            .window_handle().expect("Failed to get window handle");
-        self.vulkan = Some(Vulkan::new(display_handle.into(), window_handle.into())
-            .expect("Failed to init vulkan"));
+        let window = unsafe { self.window.as_ref().unwrap_unchecked() };
+
+        let display_handle = window.display_handle()
+            .expect("Failed to get display handle from window");
+        let window_handle = window.window_handle()
+            .expect("Failed to get window handle");
+
+        self.vulkan = Some(
+            Vulkan::new(
+                display_handle.into(), window_handle.into(), window.inner_size(),
+            )
+                .expect("Failed to init vulkan")
+        );
     }
 
     fn window_event(&mut self,

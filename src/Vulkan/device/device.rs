@@ -3,9 +3,11 @@ use ash::vk;
 
 use super::physical_device::{get_physical_device};
 use crate::utils::Result;
+use crate::vulkan::swap_chain::SwapChainBuilder;
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
     vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr(),
+    vk::KHR_SWAPCHAIN_NAME.as_ptr(),
 ];
 
 pub struct Queues {
@@ -15,12 +17,16 @@ pub struct Queues {
 
 pub fn create_device(entry: &ash::Entry,
                      instance: &ash::Instance,
-                     surface: vk::SurfaceKHR)
-                     -> Result<(ash::Device, Queues)> {
-    let (physical_device, queue_families) = get_physical_device(entry, instance, surface)?;
+                     surface: vk::SurfaceKHR,
+                     window_inner_size: winit::dpi::PhysicalSize<u32>)
+                     -> Result<(ash::Device, Queues, SwapChainBuilder)> {
+    let device_data = get_physical_device(
+        entry, instance, surface, window_inner_size,
+    )?;
 
     let queue_priority = [1.];
-    let queue_create_infos: Vec<_> = queue_families.as_vec_of_unique_indexes()
+    let queue_create_infos: Vec<_> = device_data.queue_families
+        .as_vec_of_unique_indexes()
         .into_iter()
         .map(|index| {
             get_device_queue_create_info(index, &queue_priority)
@@ -32,11 +38,14 @@ pub fn create_device(entry: &ash::Entry,
                                                     &device_features);
 
     unsafe {
-        let device = instance.create_device(physical_device, &device_create_info, None)?;
-        let graphics_queue = device.get_device_queue(queue_families.graphics_index, 0);
-        let present_queue = device.get_device_queue(queue_families.graphics_index, 0);
+        let device = instance.
+            create_device(device_data.physical_device, &device_create_info, None)?;
+        let graphics_queue = device
+            .get_device_queue(device_data.queue_families.graphics_index, 0);
+        let present_queue = device
+            .get_device_queue(device_data.queue_families.graphics_index, 0);
         let queues = Queues { graphics_queue, present_queue };
-        Ok((device, queues))
+        Ok((device, queues, device_data.swap_chain_builder))
     }
 }
 

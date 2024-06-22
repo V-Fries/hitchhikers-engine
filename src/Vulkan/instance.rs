@@ -16,7 +16,7 @@ const REQUIRED_EXTENSIONS: &[&CStr] = &[
         vk::EXT_DEBUG_UTILS_NAME,
 ];
 
-pub fn create_instance(entry: &ash::Entry,
+pub unsafe fn create_instance(entry: &ash::Entry,
                        display_handle: RawDisplayHandle)
                        -> Result<ash::Instance> {
     let available_extensions = get_set_of_available_extensions(entry)?;
@@ -26,11 +26,12 @@ pub fn create_instance(entry: &ash::Entry,
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
 
-    Ok(unsafe { entry.create_instance(&create_info, None)? })
+    Ok(entry.create_instance(&create_info, None)?)
 }
 
-fn get_set_of_available_extensions(entry: &ash::Entry) -> Result<HashSet<String>> {
-    unsafe { entry.enumerate_instance_extension_properties(None)? }
+unsafe fn get_set_of_available_extensions(entry: &ash::Entry)
+                                          -> Result<HashSet<String>> {
+    entry.enumerate_instance_extension_properties(None)?
         .into_iter()
         .map(|elem| {
             Ok(elem.extension_name_as_c_str()?

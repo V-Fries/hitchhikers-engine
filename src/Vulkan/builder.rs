@@ -1,5 +1,11 @@
 use ash::vk;
+use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use crate::vulkan::{device, Vulkan};
+use crate::vulkan::instance::create_instance;
+#[cfg(feature = "validation_layers")]
+use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
+use crate::utils::Result;
+use crate::vulkan::swap_chain::SwapChainBuilder;
 
 #[derive(Default)]
 pub struct VulkanBuilder {
@@ -13,6 +19,7 @@ pub struct VulkanBuilder {
 
     surface: Option<vk::SurfaceKHR>,
 
+    swap_chain_builder: Option<SwapChainBuilder>,
     swap_chain: Option<vk::SwapchainKHR>,
     swap_chain_images: Option<Vec<vk::Image>>,
     swap_chain_format: Option<vk::SurfaceFormatKHR>,
@@ -20,100 +27,101 @@ pub struct VulkanBuilder {
 }
 
 impl VulkanBuilder {
-    pub fn set_entry(&mut self, entry: ash::Entry) {
+    pub unsafe fn new(display_handle: RawDisplayHandle,
+                      window_handle: RawWindowHandle,
+                      window_inner_size: winit::dpi::PhysicalSize<u32>)
+                      -> Result<Self> {
+        let mut builder = Self::default()
+            .create_entry()?;
+
+        #[cfg(feature = "validation_layers")] {
+            check_validation_layers(builder.get_entry())?;
+        }
+
+        builder = builder.create_instance(display_handle)?;
+
+        #[cfg(feature = "validation_layers")] {
+            builder = builder.create_debug_messenger()?;
+        }
+
+        builder = builder
+            .create_surface(display_handle, window_handle)?
+            .create_device_and_queues(window_inner_size)?
+            .create_swap_chain()?;
+        Ok(builder)
+    }
+
+    unsafe fn create_entry(mut self) -> Result<Self, ash::LoadingError> {
+        let entry = ash::Entry::load()?;
         self.entry = Some(entry);
+        Ok(self)
     }
 
-    pub fn set_instance(&mut self, instance: ash::Instance) {
+    unsafe fn create_instance(mut self,
+                              display_handle: RawDisplayHandle)
+                              -> Result<Self> {
+        let instance = create_instance(self.get_entry(), display_handle)?;
         self.instance = Some(instance);
+        Ok(self)
     }
 
     #[cfg(feature = "validation_layers")]
-    pub fn set_debug_messenger(&mut self, debug_messenger: vk::DebugUtilsMessengerEXT) {
+    unsafe fn create_debug_messenger(mut self) -> Result<Self> {
+        let debug_messenger = setup_debug_messenger(self.get_entry(),
+                                                    self.get_instance())?;
         self.debug_messenger = Some(debug_messenger);
+        Ok(self)
     }
 
-    pub fn set_device(&mut self, device: ash::Device) {
-        self.device = Some(device);
-    }
-
-    pub fn set_queues(&mut self, queues: device::Queues) {
-        self.queues = Some(queues);
-    }
-
-    pub fn set_surface(&mut self, surface: vk::SurfaceKHR) {
+    unsafe fn create_surface(mut self,
+                             display_handle: RawDisplayHandle,
+                             window_handle: RawWindowHandle)
+                             -> Result<Self> {
+        let surface = ash_window::create_surface(
+            self.get_entry(),
+            self.get_instance(),
+            display_handle,
+            window_handle,
+            None,
+        )?;
         self.surface = Some(surface);
+        Ok(self)
     }
 
-    pub fn set_swap_chain(&mut self, swap_chain: vk::SwapchainKHR) {
+    unsafe fn create_device_and_queues(
+        mut self,
+        window_inner_size: winit::dpi::PhysicalSize<u32>)
+        -> Result<Self>
+    {
+        let (device, queues, swap_chain_builder) = device::create_device(
+            self.get_entry(), self.get_instance(), self.get_surface(),
+            window_inner_size,
+        )?;
+        self.device = Some(device);
+        self.queues = Some(queues);
+        self.swap_chain_builder = Some(swap_chain_builder);
+        Ok(self)
+    }
+
+    unsafe fn create_swap_chain(mut self) -> Result<Self> {
+        let swap_chain = self.get_swap_chain_builder().build(
+            self.get_instance(), self.get_surface(), self.get_device(),
+        )?;
         self.swap_chain = Some(swap_chain);
+
+        let swap_chain_image = ash::khr::swapchain::Device::new(
+            self.get_instance(), self.get_device(),
+        ).get_swapchain_images(self.get_swap_chain())?;
+        self.swap_chain_images = Some(swap_chain_image);
+
+        self.swap_chain_format = Some(self.get_swap_chain_builder().format);
+        self.swap_chain_extent = Some(self.get_swap_chain_builder().extent);
+        Ok(self)
     }
 
-    pub fn set_swap_chain_images(&mut self, swap_chain_images: Vec<vk::Image>) {
-        self.swap_chain_images = Some(swap_chain_images);
-    }
 
-    pub fn set_swap_chain_format(&mut self, swap_chain_format: vk::SurfaceFormatKHR) {
-        self.swap_chain_format = Some(swap_chain_format);
-    }
-
-    pub fn set_swap_chain_extent(&mut self, swap_chain_extent: vk::Extent2D) {
-        self.swap_chain_extent = Some(swap_chain_extent);
-    }
-
-    pub fn get_entry(&self) -> &ash::Entry {
-        self.entry.as_ref()
-            .expect("get_entry() was called before the value was initialised")
-    }
-
-    pub fn get_instance(&self) -> &ash::Instance {
-        self.instance.as_ref()
-            .expect("get_instance() was called before the value was initialised")
-    }
-
-    #[cfg(feature = "validation_layers")]
-    pub fn get_debug_messenger(&self) -> &vk::DebugUtilsMessengerEXT {
-        self.debug_messenger.as_ref()
-            .expect("get_debug_messenger() was called before the value was initialised")
-    }
-
-    pub fn get_device(&self) -> &ash::Device {
-        self.device.as_ref()
-            .expect("get_device() was called before the value was initialised")
-    }
-
-    pub fn get_queues(&self) -> &device::Queues {
-        self.queues.as_ref()
-            .expect("get_queues() was called before the value was initialised")
-    }
-
-    pub fn get_surface(&self) -> vk::SurfaceKHR {
-        self.surface
-            .expect("get_surface() was called before the value was initialised")
-    }
-
-    pub fn get_swap_chain(&self) -> vk::SwapchainKHR {
-        self.swap_chain
-            .expect("get_swap_chain() was called before the value was initialised")
-    }
-
-    pub fn get_swap_chain_images(&self) -> &[vk::Image] {
-        self.swap_chain_images.as_ref()
-            .expect("get_swap_chain_images() was called before the value was initialised")
-    }
-
-    pub fn get_swap_chain_format(&self) -> &vk::SurfaceFormatKHR {
-        self.swap_chain_format.as_ref()
-            .expect("get_swap_chain_format() was called before the value was initialised")
-    }
-
-    pub fn get_swap_chain_extent(&self) -> &vk::Extent2D {
-        self.swap_chain_extent.as_ref()
-            .expect("get_swap_chain_extent() was called before the value was initialised")
-    }
-
-    pub fn build(mut self) -> Vulkan {
-        Vulkan {
+    pub fn build(mut self) -> Result<Vulkan> {
+        Ok(Vulkan {
             entry: self.entry.take()
                 .expect("Vulkan entry was not initialised"),
             instance: self.instance.take()
@@ -138,42 +146,117 @@ impl VulkanBuilder {
                 .expect("Vulkan swap_chain_format was not initialised"),
             swap_chain_extent: self.swap_chain_extent.take()
                 .expect("Vulkan swap_chain_extent was not initialised"),
-        }
+        })
+    }
+
+
+    fn get_entry(&self) -> &ash::Entry {
+        self.entry.as_ref()
+            .expect("get_entry() was called before the value was initialised")
+    }
+
+    fn get_instance(&self) -> &ash::Instance {
+        self.instance.as_ref()
+            .expect("get_instance() was called before the value was initialised")
+    }
+
+    #[cfg(feature = "validation_layers")]
+    fn get_debug_messenger(&self) -> &vk::DebugUtilsMessengerEXT {
+        self.debug_messenger.as_ref()
+            .expect("get_debug_messenger() was called before the value was initialised")
+    }
+
+    fn get_device(&self) -> &ash::Device {
+        self.device.as_ref()
+            .expect("get_device() was called before the value was initialised")
+    }
+
+    fn get_queues(&self) -> &device::Queues {
+        self.queues.as_ref()
+            .expect("get_queues() was called before the value was initialised")
+    }
+
+    fn get_surface(&self) -> vk::SurfaceKHR {
+        self.surface
+            .expect("get_surface() was called before the value was initialised")
+    }
+
+    fn get_swap_chain_builder(&self) -> &SwapChainBuilder {
+        self.swap_chain_builder.as_ref()
+            .expect("get_swap_chain_builder() was called before the value was initialised")
+    }
+
+    fn get_swap_chain(&self) -> vk::SwapchainKHR {
+        self.swap_chain
+            .expect("get_swap_chain() was called before the value was initialised")
+    }
+
+    fn get_swap_chain_images(&self) -> &[vk::Image] {
+        self.swap_chain_images.as_ref()
+            .expect("get_swap_chain_images() was called before the value was initialised")
+    }
+
+    fn get_swap_chain_format(&self) -> &vk::SurfaceFormatKHR {
+        self.swap_chain_format.as_ref()
+            .expect("get_swap_chain_format() was called before the value was initialised")
+    }
+
+    fn get_swap_chain_extent(&self) -> &vk::Extent2D {
+        self.swap_chain_extent.as_ref()
+            .expect("get_swap_chain_extent() was called before the value was initialised")
     }
 }
 
 impl Drop for VulkanBuilder {
     fn drop(&mut self) {
-        let Some(entry) = &self.entry else {
-            return;
-        };
-        let Some(instance) = &self.instance else {
-            return;
-        };
-
         unsafe {
-            if let Some(swap_chain) = self.swap_chain {
-                ash::khr::swapchain::Device::new(
-                    instance,
-                    // device must exist if swap chain does
-                    self.device.as_ref()
-                        .expect("Error: swap chain exist but device is None"),
-                )
-                    .destroy_swapchain(swap_chain, None);
-            }
-            if let Some(device) = &self.device {
-                device.destroy_device(None);
-            }
+            self.destroy_swap_chain();
+            self.destroy_device();
             #[cfg(feature = "validation_layers")] {
-                if let Some(debug_messenger) = self.debug_messenger {
-                    ash::ext::debug_utils::Instance::new(entry, instance)
-                        .destroy_debug_utils_messenger(debug_messenger, None);
-                }
+                self.destroy_debug_messenger();
             }
-            if let Some(surface) = self.surface {
-                ash::khr::surface::Instance::new(entry, instance)
-                    .destroy_surface(surface, None);
-            }
+            self.destroy_surface();
+            self.destroy_instance();
+        }
+    }
+}
+
+impl VulkanBuilder {
+    unsafe fn destroy_swap_chain(&mut self) {
+        if let Some(swap_chain) = self.swap_chain {
+            ash::khr::swapchain::Device::new(
+                self.instance.as_ref().unwrap(),
+                self.device.as_ref().unwrap(),
+            )
+                .destroy_swapchain(swap_chain, None);
+        }
+    }
+
+    unsafe fn destroy_device(&mut self) {
+        if let Some(device) = &self.device {
+            device.destroy_device(None);
+        }
+    }
+
+    #[cfg(feature = "validation_layers")]
+    unsafe fn destroy_debug_messenger(&mut self) {
+        if let Some(debug_messenger) = self.debug_messenger {
+            ash::ext::debug_utils::Instance::new(self.entry.as_ref().unwrap(),
+                                                 self.instance.as_ref().unwrap())
+                .destroy_debug_utils_messenger(debug_messenger, None);
+        }
+    }
+
+    unsafe fn destroy_surface(&mut self) {
+        if let Some(surface) = self.surface {
+            ash::khr::surface::Instance::new(self.entry.as_ref().unwrap(),
+                                             self.instance.as_ref().unwrap())
+                .destroy_surface(surface, None);
+        }
+    }
+
+    unsafe fn destroy_instance(&mut self) {
+        if let Some(instance) = &self.instance {
             instance.destroy_instance(None);
         }
     }

@@ -15,11 +15,11 @@ pub struct Queues {
     pub present_queue: vk::Queue,
 }
 
-pub fn create_device(entry: &ash::Entry,
-                     instance: &ash::Instance,
-                     surface: vk::SurfaceKHR,
-                     window_inner_size: winit::dpi::PhysicalSize<u32>)
-                     -> Result<(ash::Device, Queues, SwapChainBuilder)> {
+pub unsafe fn create_device(entry: &ash::Entry,
+                            instance: &ash::Instance,
+                            surface: vk::SurfaceKHR,
+                            window_inner_size: winit::dpi::PhysicalSize<u32>)
+                            -> Result<(ash::Device, Queues, SwapChainBuilder)> {
     let device_data = get_physical_device(
         entry, instance, surface, window_inner_size,
     )?;
@@ -37,16 +37,14 @@ pub fn create_device(entry: &ash::Entry,
     let device_create_info = get_device_create_info(&queue_create_infos,
                                                     &device_features);
 
-    unsafe {
-        let device = instance.
-            create_device(device_data.physical_device, &device_create_info, None)?;
-        let graphics_queue = device
-            .get_device_queue(device_data.queue_families.graphics_index, 0);
-        let present_queue = device
-            .get_device_queue(device_data.queue_families.graphics_index, 0);
-        let queues = Queues { graphics_queue, present_queue };
-        Ok((device, queues, device_data.swap_chain_builder))
-    }
+    let device = instance.
+        create_device(device_data.physical_device, &device_create_info, None)?;
+    let graphics_queue = device
+        .get_device_queue(device_data.queue_families.graphics_index, 0);
+    let present_queue = device
+        .get_device_queue(device_data.queue_families.graphics_index, 0);
+    let queues = Queues { graphics_queue, present_queue };
+    Ok((device, queues, device_data.swap_chain_builder))
 }
 
 fn get_device_queue_create_info(queue_index: u32,

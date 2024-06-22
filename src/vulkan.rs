@@ -4,6 +4,7 @@ mod validation_layers;
 mod instance;
 mod device;
 mod swap_chain;
+mod builder;
 
 use ash::vk;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -12,6 +13,7 @@ use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use validation_layers::*;
 use crate::vulkan::instance::create_instance;
 use crate::utils::Result;
+use crate::vulkan::builder::VulkanBuilder;
 
 pub struct Vulkan {
     entry: ash::Entry,
@@ -31,149 +33,49 @@ pub struct Vulkan {
 }
 
 impl Vulkan {
-    #[cfg(feature = "validation_layers")]
-    pub fn new(display_handle: RawDisplayHandle,
-               window_handle: RawWindowHandle,
-               window_inner_size: winit::dpi::PhysicalSize<u32>) -> Result<Self> {
-        let entry = unsafe { ash::Entry::load()? };
+    pub unsafe fn new(display_handle: RawDisplayHandle,
+                      window_handle: RawWindowHandle,
+                      window_inner_size: winit::dpi::PhysicalSize<u32>)
+                      -> Result<Self> {
+        let mut builder = VulkanBuilder::default();
+        builder.set_entry(ash::Entry::load()?);
 
-        check_validation_layers(&entry)?;
+        #[cfg(feature = "validation_layers")] {
+            check_validation_layers(builder.get_entry())?;
+        }
 
-        let instance = create_instance(&entry, display_handle)?;
+        builder.set_instance(create_instance(builder.get_entry(),
+                                             display_handle)?);
 
-        let debug_messenger = setup_debug_messenger(&entry, &instance)
-            .map_err(|err| unsafe {
-                instance.destroy_instance(None);
-                err
-            })?;
+        #[cfg(feature = "validation_layers")] {
+            builder.set_debug_messenger(setup_debug_messenger(builder.get_entry(),
+                                                              builder.get_instance())?);
+        }
 
-        let surface = unsafe {
-            ash_window::create_surface(
-                &entry, &instance, display_handle, window_handle, None,
-            )
-                .map_err(|err| {
-                    ash::ext::debug_utils::Instance::new(&entry, &instance)
-                        .destroy_debug_utils_messenger(debug_messenger, None);
-                    instance.destroy_instance(None);
-                    err
-                })?
-        };
+        builder.set_surface(ash_window::create_surface(
+            builder.get_entry(), builder.get_instance(),
+            display_handle, window_handle, None,
+        )?);
 
         let (device, queues, swap_chain_builder) = device::create_device(
-            &entry, &instance, surface, window_inner_size,
-        )
-            .map_err(|err| unsafe {
-                ash::ext::debug_utils::Instance::new(&entry, &instance)
-                    .destroy_debug_utils_messenger(debug_messenger, None);
-                ash::khr::surface::Instance::new(&entry, &instance)
-                    .destroy_surface(surface, None);
-                instance.destroy_instance(None);
-                err
-            })?;
+            builder.get_entry(), builder.get_instance(), builder.get_surface(),
+            window_inner_size,
+        )?;
+        builder.set_device(device);
+        builder.set_queues(queues);
 
-        let swap_chain = swap_chain_builder.build(&instance, surface, &device)
-            .map_err(|err| unsafe {
-                device.destroy_device(None);
-                ash::ext::debug_utils::Instance::new(&entry, &instance)
-                    .destroy_debug_utils_messenger(debug_messenger, None);
-                ash::khr::surface::Instance::new(&entry, &instance)
-                    .destroy_surface(surface, None);
-                instance.destroy_instance(None);
-                err
-            })?;
+        builder.set_swap_chain(swap_chain_builder.build(
+            builder.get_instance(), builder.get_surface(), builder.get_device(),
+        )?);
+        builder.set_swap_chain_images(
+            ash::khr::swapchain::Device::new(builder.get_instance(),
+                                             builder.get_device())
+                .get_swapchain_images(builder.get_swap_chain())?
+        );
+        builder.set_swap_chain_format(swap_chain_builder.format);
+        builder.set_swap_chain_extent(swap_chain_builder.extent);
 
-        let swap_chain_images = unsafe {
-            ash::khr::swapchain::Device::new(&instance, &device)
-                .get_swapchain_images(swap_chain)
-        }
-            .map_err(|err| unsafe {
-                ash::khr::swapchain::Device::new(&instance, &device)
-                    .destroy_swapchain(swap_chain, None);
-                device.destroy_device(None);
-                ash::ext::debug_utils::Instance::new(&entry, &instance)
-                    .destroy_debug_utils_messenger(debug_messenger, None);
-                ash::khr::surface::Instance::new(&entry, &instance)
-                    .destroy_surface(surface, None);
-                instance.destroy_instance(None);
-                err
-            })?;
-
-        Ok(Self {
-            entry,
-            instance,
-            debug_messenger,
-            device,
-            queues,
-            surface,
-            swap_chain,
-            swap_chain_images,
-            swap_chain_format: swap_chain_builder.format,
-            swap_chain_extent: swap_chain_builder.extent,
-        })
-    }
-
-    #[cfg(not(feature = "validation_layers"))]
-    pub fn new(display_handle: RawDisplayHandle,
-               window_handle: RawWindowHandle,
-               window_inner_size: winit::dpi::PhysicalSize<u32>) -> Result<Self> {
-        let entry = unsafe { ash::Entry::load()? };
-
-        let instance = create_instance(&entry, display_handle)?;
-
-        let surface = unsafe {
-            ash_window::create_surface(
-                &entry, &instance, display_handle, window_handle, None,
-            )
-                .map_err(|err| {
-                    instance.destroy_instance(None);
-                    err
-                })?
-        };
-
-        let (device, queues, swap_chain_builder) = device::create_device(
-            &entry, &instance, surface, window_inner_size,
-        )
-            .map_err(|err| unsafe {
-                ash::khr::surface::Instance::new(&entry, &instance)
-                    .destroy_surface(surface, None);
-                instance.destroy_instance(None);
-                err
-            })?;
-
-        let swap_chain = swap_chain_builder.build(&instance, surface, &device)
-            .map_err(|err| unsafe {
-                device.destroy_device(None);
-                ash::khr::surface::Instance::new(&entry, &instance)
-                    .destroy_surface(surface, None);
-                instance.destroy_instance(None);
-                err
-            })?;
-
-        let swap_chain_images = unsafe {
-            ash::khr::swapchain::Device::new(&instance, &device)
-                .get_swapchain_images(swap_chain)
-        }
-            .map_err(|err| unsafe {
-                ash::khr::swapchain::Device::new(&instance, &device)
-                    .destroy_swapchain(swap_chain, None);
-                device.destroy_device(None);
-                ash::khr::surface::Instance::new(&entry, &instance)
-                    .destroy_surface(surface, None);
-                instance.destroy_instance(None);
-                err
-            })?;
-
-        Ok(Self {
-            entry,
-            instance,
-            device,
-            queues,
-            surface,
-            swap_chain,
-            swap_chain_images,
-            swap_chain_format: swap_chain_builder.format,
-            swap_chain_extent: swap_chain_builder.extent,
-        })
+        Ok(builder.build())
     }
 }
 

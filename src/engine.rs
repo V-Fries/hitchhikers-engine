@@ -38,12 +38,12 @@ impl ApplicationHandler for Engine {
         let window_handle = window.window_handle()
             .expect("Failed to get window handle");
 
-        self.vulkan = Some(
+        self.vulkan = Some(unsafe {
             Vulkan::new(
                 display_handle.into(), window_handle.into(), window.inner_size(),
             )
                 .expect("Failed to init vulkan")
-        );
+        });
     }
 
     fn window_event(&mut self,

@@ -5,7 +5,7 @@ use crate::vulkan::instance::create_instance;
 #[cfg(feature = "validation_layers")]
 use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
 use crate::utils::Result;
-use crate::vulkan::swap_chain::SwapChainBuilder;
+use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device};
 
 #[derive(Default)]
 pub struct VulkanBuilder {
@@ -14,12 +14,12 @@ pub struct VulkanBuilder {
     #[cfg(feature = "validation_layers")]
     debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
+    device_data: Option<DeviceData>,
     device: Option<ash::Device>,
     queues: Option<device::Queues>,
 
     surface: Option<vk::SurfaceKHR>,
 
-    swap_chain_builder: Option<SwapChainBuilder>,
     swap_chain: Option<vk::SwapchainKHR>,
     swap_chain_images: Option<Vec<vk::Image>>,
     swap_chain_format: Option<vk::SurfaceFormatKHR>,
@@ -46,7 +46,8 @@ impl VulkanBuilder {
 
         builder = builder
             .create_surface(display_handle, window_handle)?
-            .create_device_and_queues(window_inner_size)?
+            .create_device(window_inner_size)?
+            .create_queues()
             .create_swap_chain()?;
         Ok(builder)
     }
@@ -88,23 +89,32 @@ impl VulkanBuilder {
         Ok(self)
     }
 
-    unsafe fn create_device_and_queues(
+    unsafe fn create_device(
         mut self,
         window_inner_size: winit::dpi::PhysicalSize<u32>)
         -> Result<Self>
     {
-        let (device, queues, swap_chain_builder) = device::create_device(
+        let device_data = pick_physical_device(
             self.get_entry(), self.get_instance(), self.get_surface(),
             window_inner_size,
         )?;
+
+        let device = create_device(self.get_instance(), &device_data)?;
+
         self.device = Some(device);
-        self.queues = Some(queues);
-        self.swap_chain_builder = Some(swap_chain_builder);
+        self.device_data = Some(device_data);
         Ok(self)
     }
 
+    unsafe fn create_queues(mut self) -> Self {
+        let queues = create_device_queue(self.get_device(), self.get_device_data());
+        self.queues = Some(queues);
+        self
+    }
+
     unsafe fn create_swap_chain(mut self) -> Result<Self> {
-        let swap_chain = self.get_swap_chain_builder().build(
+        let swap_chain_builder = self.take_device_data().swap_chain_builder;
+        let swap_chain = swap_chain_builder.build(
             self.get_instance(), self.get_surface(), self.get_device(),
         )?;
         self.swap_chain = Some(swap_chain);
@@ -114,8 +124,8 @@ impl VulkanBuilder {
         ).get_swapchain_images(self.get_swap_chain())?;
         self.swap_chain_images = Some(swap_chain_image);
 
-        self.swap_chain_format = Some(self.get_swap_chain_builder().format);
-        self.swap_chain_extent = Some(self.get_swap_chain_builder().extent);
+        self.swap_chain_format = Some(swap_chain_builder.format);
+        self.swap_chain_extent = Some(swap_chain_builder.extent);
         Ok(self)
     }
 
@@ -181,9 +191,14 @@ impl VulkanBuilder {
             .expect("get_surface() was called before the value was initialised")
     }
 
-    fn get_swap_chain_builder(&self) -> &SwapChainBuilder {
-        self.swap_chain_builder.as_ref()
+    fn get_device_data(&self) -> &DeviceData {
+        self.device_data.as_ref()
             .expect("get_swap_chain_builder() was called before the value was initialised")
+    }
+
+    fn take_device_data(&mut self) -> DeviceData {
+        self.device_data.take()
+            .expect("take_device_data() was called before the value was initialised")
     }
 
     fn get_swap_chain(&self) -> vk::SwapchainKHR {

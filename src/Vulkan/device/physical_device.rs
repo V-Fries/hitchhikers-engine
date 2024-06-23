@@ -56,22 +56,22 @@ impl QueueFamilies {
 }
 
 
-pub unsafe fn get_physical_device(entry: &ash::Entry,
-                                  instance: &ash::Instance,
-                                  surface: vk::SurfaceKHR,
-                                  window_inner_size: winit::dpi::PhysicalSize<u32>)
-                                  -> Result<DeviceData> {
+pub unsafe fn pick_physical_device(entry: &ash::Entry,
+                                   instance: &ash::Instance,
+                                   surface: vk::SurfaceKHR,
+                                   window_inner_size: winit::dpi::PhysicalSize<u32>)
+                                   -> Result<DeviceData> {
     let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
     instance.enumerate_physical_devices()?
         .into_iter()
         .filter_map(|device| {
-            match get_scored_device(
+            match get_device_data(
                 instance, &surface_instance, surface, window_inner_size, device,
             ) {
                 Ok(scored_device) => Some(scored_device),
                 Err(err) => {
-                    eprintln!("Failed to score device {device:?}: {err}");
+                    println!("Failed to score device {device:?}: {err}");
                     None
                 }
             }
@@ -80,11 +80,11 @@ pub unsafe fn get_physical_device(entry: &ash::Entry,
         .ok_or(NoSuitablePhysicalDevice::new().into())
 }
 
-unsafe fn get_scored_device(instance: &ash::Instance,
-                            surface_instance: &ash::khr::surface::Instance,
-                            surface: vk::SurfaceKHR,
-                            window_inner_size: winit::dpi::PhysicalSize<u32>,
-                            device: vk::PhysicalDevice) -> Result<DeviceData> {
+unsafe fn get_device_data(instance: &ash::Instance,
+                          surface_instance: &ash::khr::surface::Instance,
+                          surface: vk::SurfaceKHR,
+                          window_inner_size: winit::dpi::PhysicalSize<u32>,
+                          device: vk::PhysicalDevice) -> Result<DeviceData> {
     let device_properties = instance.get_physical_device_properties(device);
     let device_features = instance.get_physical_device_features(device);
     let queue_families = find_queue_families(instance, surface_instance, surface, device)?;

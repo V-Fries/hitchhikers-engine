@@ -130,8 +130,8 @@ impl VulkanBuilder {
     }
 
 
-    pub fn build(mut self) -> Result<Vulkan> {
-        Ok(Vulkan {
+    pub fn build(mut self) -> Vulkan {
+        Vulkan {
             entry: self.entry.take()
                 .expect("Vulkan entry was not initialised"),
             instance: self.instance.take()
@@ -156,7 +156,7 @@ impl VulkanBuilder {
                 .expect("Vulkan swap_chain_format was not initialised"),
             swap_chain_extent: self.swap_chain_extent.take()
                 .expect("Vulkan swap_chain_extent was not initialised"),
-        })
+        }
     }
 
 

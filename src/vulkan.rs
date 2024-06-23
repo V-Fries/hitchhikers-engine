@@ -34,10 +34,10 @@ impl Vulkan {
                       window_handle: RawWindowHandle,
                       window_inner_size: winit::dpi::PhysicalSize<u32>)
                       -> Result<Self> {
-        let builder = VulkanBuilder::new(display_handle,
-                                         window_handle,
-                                         window_inner_size)?;
-        builder.build()
+        Ok(
+            VulkanBuilder::new(display_handle, window_handle, window_inner_size)?
+                .build()
+        )
     }
 }
 

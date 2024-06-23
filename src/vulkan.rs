@@ -5,6 +5,7 @@ mod instance;
 mod device;
 mod swap_chain;
 mod builder;
+mod image_views;
 
 use ash::vk;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -25,8 +26,9 @@ pub struct Vulkan {
 
     swap_chain: vk::SwapchainKHR,
     swap_chain_images: Vec<vk::Image>,
-    swap_chain_format: vk::SurfaceFormatKHR,
+    swap_chain_format: vk::Format,
     swap_chain_extent: vk::Extent2D,
+    image_views: Vec<vk::ImageView>,
 }
 
 impl Vulkan {
@@ -44,6 +46,9 @@ impl Vulkan {
 impl Drop for Vulkan {
     fn drop(&mut self) {
         unsafe {
+            for image_view in self.image_views.iter() {
+                self.device.destroy_image_view(*image_view, None);
+            }
             ash::khr::swapchain::Device::new(&self.instance, &self.device)
                 .destroy_swapchain(self.swap_chain, None);
             self.device.destroy_device(None);

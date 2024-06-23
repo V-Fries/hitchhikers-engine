@@ -1,3 +1,4 @@
+use ash::prelude::VkResult;
 use ash::vk;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use crate::vulkan::{device, Vulkan};
@@ -6,6 +7,7 @@ use crate::vulkan::instance::create_instance;
 use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
 use crate::utils::Result;
 use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device};
+use crate::vulkan::image_views::create_image_views;
 
 #[derive(Default)]
 pub struct VulkanBuilder {
@@ -22,8 +24,9 @@ pub struct VulkanBuilder {
 
     swap_chain: Option<vk::SwapchainKHR>,
     swap_chain_images: Option<Vec<vk::Image>>,
-    swap_chain_format: Option<vk::SurfaceFormatKHR>,
+    swap_chain_format: Option<vk::Format>,
     swap_chain_extent: Option<vk::Extent2D>,
+    image_views: Option<Vec<vk::ImageView>>,
 }
 
 impl VulkanBuilder {
@@ -48,7 +51,8 @@ impl VulkanBuilder {
             .create_surface(display_handle, window_handle)?
             .create_device(window_inner_size)?
             .create_queues()
-            .create_swap_chain()?;
+            .create_swap_chain()?
+            .create_image_views()?;
         Ok(builder)
     }
 
@@ -124,8 +128,16 @@ impl VulkanBuilder {
         ).get_swapchain_images(self.get_swap_chain())?;
         self.swap_chain_images = Some(swap_chain_image);
 
-        self.swap_chain_format = Some(swap_chain_builder.format);
+        self.swap_chain_format = Some(swap_chain_builder.format.format);
         self.swap_chain_extent = Some(swap_chain_builder.extent);
+        Ok(self)
+    }
+
+    unsafe fn create_image_views(mut self) -> VkResult<Self> {
+        let image_views = create_image_views(self.get_device(),
+                                             self.get_swap_chain_images(),
+                                             self.get_swap_chain_format())?;
+        self.image_views = Some(image_views);
         Ok(self)
     }
 
@@ -156,6 +168,8 @@ impl VulkanBuilder {
                 .expect("Vulkan swap_chain_format was not initialised"),
             swap_chain_extent: self.swap_chain_extent.take()
                 .expect("Vulkan swap_chain_extent was not initialised"),
+            image_views: self.image_views.take()
+                .expect("Vulkan image_views was not initialised"),
         }
     }
 
@@ -211,8 +225,8 @@ impl VulkanBuilder {
             .expect("get_swap_chain_images() was called before the value was initialised")
     }
 
-    fn get_swap_chain_format(&self) -> &vk::SurfaceFormatKHR {
-        self.swap_chain_format.as_ref()
+    fn get_swap_chain_format(&self) -> vk::Format {
+        self.swap_chain_format
             .expect("get_swap_chain_format() was called before the value was initialised")
     }
 
@@ -225,6 +239,7 @@ impl VulkanBuilder {
 impl Drop for VulkanBuilder {
     fn drop(&mut self) {
         unsafe {
+            self.destroy_image_views();
             self.destroy_swap_chain();
             self.destroy_device();
             #[cfg(feature = "validation_layers")] {
@@ -237,6 +252,15 @@ impl Drop for VulkanBuilder {
 }
 
 impl VulkanBuilder {
+    unsafe fn destroy_image_views(&mut self) {
+        if let Some(image_views) = &self.image_views {
+            let device = self.get_device();
+            for image_view in image_views {
+                device.destroy_image_view(*image_view, None);
+            }
+        }
+    }
+
     unsafe fn destroy_swap_chain(&mut self) {
         if let Some(swap_chain) = self.swap_chain {
             ash::khr::swapchain::Device::new(

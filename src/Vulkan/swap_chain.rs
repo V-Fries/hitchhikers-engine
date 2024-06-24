@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use ash::prelude::VkResult;
 use ash::vk;
 
-use crate::utils::{GetAllUniques, Result};
+use crate::utils::{GetAllUniques, PipeLine, Result};
 use crate::vulkan::device::QueueFamilies;
 use super::errors::PhysicalDeviceIsNotSuitable;
 
@@ -126,11 +126,10 @@ unsafe fn get_set_of_available_formats(surface_instance: &ash::khr::surface::Ins
     let vec_of_available_formats = surface_instance
         .get_physical_device_surface_formats(device, surface)?;
 
-    Ok(
-        vec_of_available_formats
-            .into_iter()
-            .collect()
-    )
+    vec_of_available_formats
+        .into_iter()
+        .collect::<HashSet<vk::SurfaceFormatKHR>>()
+        .pipe(Ok)
 }
 
 unsafe fn choose_present_mode(surface_instance: &ash::khr::surface::Instance,
@@ -164,11 +163,10 @@ unsafe fn get_set_of_available_present_modes(
     let vec_of_available_formats = surface_instance
         .get_physical_device_surface_present_modes(device, surface)?;
 
-    Ok(
-        vec_of_available_formats
-            .into_iter()
-            .collect()
-    )
+    vec_of_available_formats
+        .into_iter()
+        .collect::<HashSet<vk::PresentModeKHR>>()
+        .pipe(Ok)
 }
 
 fn choose_extent(capabilities: vk::SurfaceCapabilitiesKHR,

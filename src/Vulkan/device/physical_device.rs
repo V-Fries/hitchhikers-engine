@@ -4,7 +4,7 @@ use crate::vulkan::errors::{NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitabl
 
 use ash::vk;
 
-use crate::utils::{GetAllUniques, Result};
+use crate::utils::{GetAllUniques, PipeLine, Result};
 use crate::vulkan::swap_chain::SwapChainBuilder;
 use super::device::REQUIRED_EXTENSIONS;
 
@@ -28,12 +28,13 @@ impl QueueFamiliesBuilder {
     fn build(&self, device: vk::PhysicalDevice) -> Result<QueueFamilies> {
         let option_to_u32 = |option: Option<usize>, queue_name: &str|
                              -> Result<u32, PhysicalDeviceIsNotSuitable> {
-            let index = option
+            option
                 .ok_or(PhysicalDeviceIsNotSuitable::new(
                     device,
                     format!("{queue_name} queue is not supported"),
-                ))?;
-            Ok(index as u32)
+                ))?
+                .pipe(|p| p as u32)
+                .pipe(Ok)
         };
 
         Ok(QueueFamilies {
@@ -96,7 +97,12 @@ unsafe fn get_device_data(instance: &ash::Instance,
     )?;
     let score = score_device(device_properties, device_features);
 
-    Ok(DeviceData { physical_device: device, queue_families, swap_chain_builder, score })
+    Ok(DeviceData {
+        physical_device: device,
+        queue_families,
+        swap_chain_builder,
+        score,
+    })
 }
 
 unsafe fn check_device_suitability(instance: &ash::Instance,

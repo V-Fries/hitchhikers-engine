@@ -5,7 +5,7 @@ use crate::vulkan::{device, Vulkan};
 use crate::vulkan::instance::create_instance;
 #[cfg(feature = "validation_layers")]
 use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
-use crate::utils::Result;
+use crate::utils::{PipeLine, Result};
 use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device};
 use crate::vulkan::image_views::create_image_views;
 
@@ -47,34 +47,34 @@ impl VulkanBuilder {
             builder = builder.create_debug_messenger()?;
         }
 
-        builder = builder
+        builder
             .create_surface(display_handle, window_handle)?
             .create_device(window_inner_size)?
             .create_queues()
             .create_swap_chain()?
-            .create_image_views()?;
-        Ok(builder)
+            .create_image_views()?
+            .pipe(Ok)
     }
 
     unsafe fn create_entry(mut self) -> Result<Self, ash::LoadingError> {
-        let entry = ash::Entry::load()?;
-        self.entry = Some(entry);
+        self.entry = ash::Entry::load()?
+            .pipe(Some);
         Ok(self)
     }
 
     unsafe fn create_instance(mut self,
                               display_handle: RawDisplayHandle)
                               -> Result<Self> {
-        let instance = create_instance(self.get_entry(), display_handle)?;
-        self.instance = Some(instance);
+        self.instance = create_instance(self.get_entry(), display_handle)?
+            .pipe(Some);
         Ok(self)
     }
 
     #[cfg(feature = "validation_layers")]
     unsafe fn create_debug_messenger(mut self) -> Result<Self> {
-        let debug_messenger = setup_debug_messenger(self.get_entry(),
-                                                    self.get_instance())?;
-        self.debug_messenger = Some(debug_messenger);
+        self.debug_messenger = setup_debug_messenger(self.get_entry(),
+                                                     self.get_instance())?
+            .pipe(Some);
         Ok(self)
     }
 
@@ -82,14 +82,14 @@ impl VulkanBuilder {
                              display_handle: RawDisplayHandle,
                              window_handle: RawWindowHandle)
                              -> Result<Self> {
-        let surface = ash_window::create_surface(
+        self.surface = ash_window::create_surface(
             self.get_entry(),
             self.get_instance(),
             display_handle,
             window_handle,
             None,
-        )?;
-        self.surface = Some(surface);
+        )?
+            .pipe(Some);
         Ok(self)
     }
 
@@ -98,35 +98,37 @@ impl VulkanBuilder {
         window_inner_size: winit::dpi::PhysicalSize<u32>)
         -> Result<Self>
     {
-        let device_data = pick_physical_device(
+        self.device_data = pick_physical_device(
             self.get_entry(), self.get_instance(), self.get_surface(),
             window_inner_size,
-        )?;
+        )?
+            .pipe(Some);
 
-        let device = create_device(self.get_instance(), &device_data)?;
+        self.device = create_device(self.get_instance(), self.get_device_data())?
+            .pipe(Some);
 
-        self.device = Some(device);
-        self.device_data = Some(device_data);
         Ok(self)
     }
 
     unsafe fn create_queues(mut self) -> Self {
-        let queues = create_device_queue(self.get_device(), self.get_device_data());
-        self.queues = Some(queues);
+        self.queues = create_device_queue(self.get_device(), self.get_device_data())
+            .pipe(Some);
         self
     }
 
     unsafe fn create_swap_chain(mut self) -> Result<Self> {
         let swap_chain_builder = self.take_device_data().swap_chain_builder;
-        let swap_chain = swap_chain_builder.build(
-            self.get_instance(), self.get_surface(), self.get_device(),
-        )?;
-        self.swap_chain = Some(swap_chain);
 
-        let swap_chain_image = ash::khr::swapchain::Device::new(
+        self.swap_chain = swap_chain_builder.build(
+            self.get_instance(), self.get_surface(), self.get_device(),
+        )?
+            .pipe(Some);
+
+        self.swap_chain_images = ash::khr::swapchain::Device::new(
             self.get_instance(), self.get_device(),
-        ).get_swapchain_images(self.get_swap_chain())?;
-        self.swap_chain_images = Some(swap_chain_image);
+        )
+            .get_swapchain_images(self.get_swap_chain())?
+            .pipe(Some);
 
         self.swap_chain_format = Some(swap_chain_builder.format.format);
         self.swap_chain_extent = Some(swap_chain_builder.extent);
@@ -134,10 +136,10 @@ impl VulkanBuilder {
     }
 
     unsafe fn create_image_views(mut self) -> VkResult<Self> {
-        let image_views = create_image_views(self.get_device(),
-                                             self.get_swap_chain_images(),
-                                             self.get_swap_chain_format())?;
-        self.image_views = Some(image_views);
+        self.image_views = create_image_views(self.get_device(),
+                                              self.get_swap_chain_images(),
+                                              self.get_swap_chain_format())?
+            .pipe(Some);
         Ok(self)
     }
 

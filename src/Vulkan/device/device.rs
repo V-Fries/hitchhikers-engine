@@ -2,7 +2,7 @@ use std::ffi::{c_char};
 use ash::vk;
 
 use super::physical_device::DeviceData;
-use crate::utils::Result;
+use crate::utils::{PipeLine, Result};
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
     vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr(),
@@ -30,10 +30,9 @@ pub unsafe fn create_device(instance: &ash::Instance,
     let device_create_info = get_device_create_info(&queue_create_infos,
                                                     &device_features);
 
-    let device = instance.
-        create_device(device_data.physical_device, &device_create_info, None)?;
-
-    Ok(device)
+    instance
+        .create_device(device_data.physical_device, &device_create_info, None)?
+        .pipe(Ok)
 }
 
 pub unsafe fn create_device_queue(device: &ash::Device,

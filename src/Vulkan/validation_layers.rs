@@ -12,11 +12,11 @@ pub const VALIDATION_LAYERS: &[*const c_char] = &[
     const_str_to_cstr!("VK_LAYER_KHRONOS_validation").as_ptr(),
 ];
 
-pub unsafe fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
+pub fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
     let available_layers = get_set_of_available_validation_layers(entry)?;
 
     for layer in VALIDATION_LAYERS {
-        let layer = CStr::from_ptr(*layer);
+        let layer = unsafe { CStr::from_ptr(*layer) };
         if !available_layers.contains(layer.to_str()?) {
             Err(ValidationLayerNotFound::new(layer))?;
         }
@@ -24,9 +24,9 @@ pub unsafe fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
     Ok(())
 }
 
-unsafe fn get_set_of_available_validation_layers(entry: &ash::Entry)
-                                                 -> Result<HashSet<String>> {
-    entry.enumerate_instance_layer_properties()?
+fn get_set_of_available_validation_layers(entry: &ash::Entry)
+                                          -> Result<HashSet<String>> {
+    unsafe { entry.enumerate_instance_layer_properties()? }
         .into_iter()
         .map::<Result<String>, _>(|elem| {
             Ok(elem.layer_name_as_c_str()?
@@ -36,11 +36,13 @@ unsafe fn get_set_of_available_validation_layers(entry: &ash::Entry)
         .collect()
 }
 
-pub unsafe fn setup_debug_messenger(entry: &ash::Entry, instance: &ash::Instance)
-                                    -> Result<vk::DebugUtilsMessengerEXT> {
+pub fn setup_debug_messenger(entry: &ash::Entry, instance: &ash::Instance)
+                             -> Result<vk::DebugUtilsMessengerEXT> {
     let create_info = get_debug_utils_messenger_create_info();
     let debug_utils = ash::ext::debug_utils::Instance::new(entry, instance);
-    Ok(debug_utils.create_debug_utils_messenger(&create_info, None)?)
+    unsafe {
+        Ok(debug_utils.create_debug_utils_messenger(&create_info, None)?)
+    }
 }
 
 fn get_debug_utils_messenger_create_info<'a>() -> vk::DebugUtilsMessengerCreateInfoEXT<'a> {

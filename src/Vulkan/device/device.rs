@@ -14,9 +14,9 @@ pub struct Queues {
     pub present_queue: vk::Queue,
 }
 
-pub unsafe fn create_device(instance: &ash::Instance,
-                            device_data: &DeviceData)
-                            -> Result<ash::Device> {
+pub fn create_device(instance: &ash::Instance,
+                     device_data: &DeviceData)
+                     -> Result<ash::Device> {
     let queue_priority = [1.];
     let queue_create_infos: Vec<_> = device_data.queue_families
         .as_vec_of_unique_indexes()
@@ -30,17 +30,21 @@ pub unsafe fn create_device(instance: &ash::Instance,
     let device_create_info = get_device_create_info(&queue_create_infos,
                                                     &device_features);
 
-    instance
-        .create_device(device_data.physical_device, &device_create_info, None)?
-        .pipe(Ok)
+    unsafe {
+        instance
+            .create_device(device_data.physical_device, &device_create_info, None)?
+            .pipe(Ok)
+    }
 }
 
-pub unsafe fn create_device_queue(device: &ash::Device,
-                                  device_data: &DeviceData) -> Queues {
-    let graphics_queue = device
-        .get_device_queue(device_data.queue_families.graphics_index, 0);
-    let present_queue = device
-        .get_device_queue(device_data.queue_families.graphics_index, 0);
+pub fn create_device_queue(device: &ash::Device,
+                           device_data: &DeviceData) -> Queues {
+    let graphics_queue = unsafe {
+        device.get_device_queue(device_data.queue_families.graphics_index, 0)
+    };
+    let present_queue = unsafe {
+        device.get_device_queue(device_data.queue_families.graphics_index, 0)
+    };
     Queues { graphics_queue, present_queue }
 }
 

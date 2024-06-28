@@ -1,15 +1,15 @@
 use ash::prelude::VkResult;
 use ash::vk;
 
-pub unsafe fn create_image_views(device: &ash::Device,
-                                 swap_chain_images: &[vk::Image],
-                                 format: vk::Format)
-                                 -> VkResult<Vec<vk::ImageView>> {
+pub fn create_image_views(device: &ash::Device,
+                          swap_chain_images: &[vk::Image],
+                          format: vk::Format)
+                          -> VkResult<Vec<vk::ImageView>> {
     swap_chain_images
         .iter()
         .map(|image| {
             let create_info = get_image_view_create_info(*image, format);
-            device.create_image_view(&create_info, None)
+            unsafe { device.create_image_view(&create_info, None) }
         })
         .collect::<VkResult<Vec<_>>>()
 }

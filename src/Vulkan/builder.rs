@@ -30,10 +30,10 @@ pub struct VulkanBuilder {
 }
 
 impl VulkanBuilder {
-    pub unsafe fn new(display_handle: RawDisplayHandle,
-                      window_handle: RawWindowHandle,
-                      window_inner_size: winit::dpi::PhysicalSize<u32>)
-                      -> Result<Self> {
+    pub fn new(display_handle: RawDisplayHandle,
+               window_handle: RawWindowHandle,
+               window_inner_size: winit::dpi::PhysicalSize<u32>)
+               -> Result<Self> {
         let mut builder = Self::default()
             .create_entry()?;
 
@@ -56,48 +56,48 @@ impl VulkanBuilder {
             .pipe(Ok)
     }
 
-    unsafe fn create_entry(mut self) -> Result<Self, ash::LoadingError> {
-        self.entry = ash::Entry::load()?
+    fn create_entry(mut self) -> Result<Self, ash::LoadingError> {
+        self.entry = unsafe { ash::Entry::load() }?
             .pipe(Some);
         Ok(self)
     }
 
-    unsafe fn create_instance(mut self,
-                              display_handle: RawDisplayHandle)
-                              -> Result<Self> {
+    fn create_instance(mut self,
+                       display_handle: RawDisplayHandle)
+                       -> Result<Self> {
         self.instance = create_instance(self.get_entry(), display_handle)?
             .pipe(Some);
         Ok(self)
     }
 
     #[cfg(feature = "validation_layers")]
-    unsafe fn create_debug_messenger(mut self) -> Result<Self> {
+    fn create_debug_messenger(mut self) -> Result<Self> {
         self.debug_messenger = setup_debug_messenger(self.get_entry(),
                                                      self.get_instance())?
             .pipe(Some);
         Ok(self)
     }
 
-    unsafe fn create_surface(mut self,
-                             display_handle: RawDisplayHandle,
-                             window_handle: RawWindowHandle)
-                             -> Result<Self> {
-        self.surface = ash_window::create_surface(
-            self.get_entry(),
-            self.get_instance(),
-            display_handle,
-            window_handle,
-            None,
-        )?
-            .pipe(Some);
+    fn create_surface(mut self,
+                      display_handle: RawDisplayHandle,
+                      window_handle: RawWindowHandle)
+                      -> Result<Self> {
+        self.surface = unsafe {
+            ash_window::create_surface(
+                self.get_entry(),
+                self.get_instance(),
+                display_handle,
+                window_handle,
+                None,
+            )?
+                .pipe(Some)
+        };
         Ok(self)
     }
 
-    unsafe fn create_device(
-        mut self,
-        window_inner_size: winit::dpi::PhysicalSize<u32>)
-        -> Result<Self>
-    {
+    fn create_device(mut self,
+                     window_inner_size: winit::dpi::PhysicalSize<u32>)
+                     -> Result<Self> {
         self.device_data = pick_physical_device(
             self.get_entry(), self.get_instance(), self.get_surface(),
             window_inner_size,
@@ -110,13 +110,13 @@ impl VulkanBuilder {
         Ok(self)
     }
 
-    unsafe fn create_queues(mut self) -> Self {
+    fn create_queues(mut self) -> Self {
         self.queues = create_device_queue(self.get_device(), self.get_device_data())
             .pipe(Some);
         self
     }
 
-    unsafe fn create_swap_chain(mut self) -> Result<Self> {
+    fn create_swap_chain(mut self) -> Result<Self> {
         let swap_chain_builder = self.take_device_data().swap_chain_builder;
 
         self.swap_chain = swap_chain_builder.build(
@@ -124,18 +124,20 @@ impl VulkanBuilder {
         )?
             .pipe(Some);
 
-        self.swap_chain_images = ash::khr::swapchain::Device::new(
-            self.get_instance(), self.get_device(),
-        )
-            .get_swapchain_images(self.get_swap_chain())?
-            .pipe(Some);
+        self.swap_chain_images = unsafe {
+            ash::khr::swapchain::Device::new(
+                self.get_instance(), self.get_device(),
+            )
+                .get_swapchain_images(self.get_swap_chain())?
+                .pipe(Some)
+        };
 
         self.swap_chain_format = Some(swap_chain_builder.format.format);
         self.swap_chain_extent = Some(swap_chain_builder.extent);
         Ok(self)
     }
 
-    unsafe fn create_image_views(mut self) -> VkResult<Self> {
+    fn create_image_views(mut self) -> VkResult<Self> {
         self.image_views = create_image_views(self.get_device(),
                                               self.get_swap_chain_images(),
                                               self.get_swap_chain_format())?
@@ -240,65 +242,69 @@ impl VulkanBuilder {
 
 impl Drop for VulkanBuilder {
     fn drop(&mut self) {
-        unsafe {
-            self.destroy_image_views();
-            self.destroy_swap_chain();
-            self.destroy_device();
-            #[cfg(feature = "validation_layers")] {
-                self.destroy_debug_messenger();
-            }
-            self.destroy_surface();
-            self.destroy_instance();
+        self.destroy_image_views();
+        self.destroy_swap_chain();
+        self.destroy_device();
+        #[cfg(feature = "validation_layers")] {
+            self.destroy_debug_messenger();
         }
+        self.destroy_surface();
+        self.destroy_instance();
     }
 }
 
 impl VulkanBuilder {
-    unsafe fn destroy_image_views(&mut self) {
+    fn destroy_image_views(&mut self) {
         if let Some(image_views) = &self.image_views {
             let device = self.get_device();
             for image_view in image_views {
-                device.destroy_image_view(*image_view, None);
+                unsafe { device.destroy_image_view(*image_view, None) };
             }
         }
     }
 
-    unsafe fn destroy_swap_chain(&mut self) {
+    fn destroy_swap_chain(&mut self) {
         if let Some(swap_chain) = self.swap_chain {
-            ash::khr::swapchain::Device::new(
-                self.instance.as_ref().unwrap(),
-                self.device.as_ref().unwrap(),
-            )
-                .destroy_swapchain(swap_chain, None);
+            unsafe {
+                ash::khr::swapchain::Device::new(
+                    self.instance.as_ref().unwrap(),
+                    self.device.as_ref().unwrap(),
+                )
+                    .destroy_swapchain(swap_chain, None);
+            }
         }
     }
 
-    unsafe fn destroy_device(&mut self) {
+    fn destroy_device(&mut self) {
         if let Some(device) = &self.device {
-            device.destroy_device(None);
+            unsafe { device.destroy_device(None) };
         }
     }
 
     #[cfg(feature = "validation_layers")]
-    unsafe fn destroy_debug_messenger(&mut self) {
+    fn destroy_debug_messenger(&mut self) {
         if let Some(debug_messenger) = self.debug_messenger {
-            ash::ext::debug_utils::Instance::new(self.entry.as_ref().unwrap(),
-                                                 self.instance.as_ref().unwrap())
-                .destroy_debug_utils_messenger(debug_messenger, None);
+            unsafe {
+                ash::ext::debug_utils::Instance::new(self.entry.as_ref().unwrap(),
+                                                     self.instance.as_ref().unwrap())
+                    .destroy_debug_utils_messenger(debug_messenger, None);
+            }
         }
     }
 
-    unsafe fn destroy_surface(&mut self) {
+    fn destroy_surface(&mut self) {
         if let Some(surface) = self.surface {
-            ash::khr::surface::Instance::new(self.entry.as_ref().unwrap(),
-                                             self.instance.as_ref().unwrap())
-                .destroy_surface(surface, None);
+            unsafe {
+                ash::khr::surface::Instance::new(self.entry.as_ref().unwrap(),
+                                                 self.instance.as_ref().unwrap())
+                    .destroy_surface(surface, None);
+            }
         }
     }
 
-    unsafe fn destroy_instance(&mut self) {
+    fn destroy_instance(&mut self) {
         if let Some(instance) = &self.instance {
-            instance.destroy_instance(None);
+            unsafe { instance.destroy_instance(None) };
         }
     }
 }

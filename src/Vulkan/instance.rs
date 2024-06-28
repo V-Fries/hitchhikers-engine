@@ -16,9 +16,9 @@ const REQUIRED_EXTENSIONS: &[&CStr] = &[
     vk::EXT_DEBUG_UTILS_NAME,
 ];
 
-pub unsafe fn create_instance(entry: &ash::Entry,
-                              display_handle: RawDisplayHandle)
-                              -> Result<ash::Instance> {
+pub fn create_instance(entry: &ash::Entry,
+                       display_handle: RawDisplayHandle)
+                       -> Result<ash::Instance> {
     let available_extensions = get_set_of_available_extensions(entry)?;
     let required_extensions = get_required_extensions(available_extensions,
                                                       display_handle)?;
@@ -26,12 +26,12 @@ pub unsafe fn create_instance(entry: &ash::Entry,
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
 
-    Ok(entry.create_instance(&create_info, None)?)
+    unsafe { Ok(entry.create_instance(&create_info, None)?) }
 }
 
-unsafe fn get_set_of_available_extensions(entry: &ash::Entry)
-                                          -> Result<HashSet<String>> {
-    entry.enumerate_instance_extension_properties(None)?
+fn get_set_of_available_extensions(entry: &ash::Entry)
+                                   -> Result<HashSet<String>> {
+    unsafe { entry.enumerate_instance_extension_properties(None)? }
         .into_iter()
         .map(|elem| {
             Ok(elem.extension_name_as_c_str()?
@@ -57,7 +57,7 @@ fn get_required_extensions(available_extensions: HashSet<String>,
     Ok(result)
 }
 
-fn get_app_info<'a>() -> vk::ApplicationInfo<'a> {
+fn get_app_info() -> vk::ApplicationInfo<'static> {
     vk::ApplicationInfo::default()
         .api_version(vk::API_VERSION_1_3)
         .application_name(ENGINE_NAME_CSTR)
@@ -74,9 +74,9 @@ fn get_create_info<'a>(required_extensions: &'a [*const c_char],
         .flags(vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR)
         .enabled_extension_names(required_extensions);
     #[cfg(feature = "validation_layers")] {
-        create_info.enabled_layer_names(VALIDATION_LAYERS)
+        return create_info.enabled_layer_names(VALIDATION_LAYERS);
     }
     #[cfg(not(feature = "validation_layers"))] {
-        create_info
+        return create_info;
     }
 }

@@ -57,14 +57,14 @@ impl QueueFamilies {
 }
 
 
-pub unsafe fn pick_physical_device(entry: &ash::Entry,
-                                   instance: &ash::Instance,
-                                   surface: vk::SurfaceKHR,
-                                   window_inner_size: winit::dpi::PhysicalSize<u32>)
-                                   -> Result<DeviceData> {
+pub fn pick_physical_device(entry: &ash::Entry,
+                            instance: &ash::Instance,
+                            surface: vk::SurfaceKHR,
+                            window_inner_size: winit::dpi::PhysicalSize<u32>)
+                            -> Result<DeviceData> {
     let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
-    instance.enumerate_physical_devices()?
+    unsafe { instance.enumerate_physical_devices()? }
         .into_iter()
         .filter_map(|device| {
             match get_device_data(
@@ -81,13 +81,13 @@ pub unsafe fn pick_physical_device(entry: &ash::Entry,
         .ok_or(NoSuitablePhysicalDevice::new().into())
 }
 
-unsafe fn get_device_data(instance: &ash::Instance,
-                          surface_instance: &ash::khr::surface::Instance,
-                          surface: vk::SurfaceKHR,
-                          window_inner_size: winit::dpi::PhysicalSize<u32>,
-                          device: vk::PhysicalDevice) -> Result<DeviceData> {
-    let device_properties = instance.get_physical_device_properties(device);
-    let device_features = instance.get_physical_device_features(device);
+fn get_device_data(instance: &ash::Instance,
+                   surface_instance: &ash::khr::surface::Instance,
+                   surface: vk::SurfaceKHR,
+                   window_inner_size: winit::dpi::PhysicalSize<u32>,
+                   device: vk::PhysicalDevice) -> Result<DeviceData> {
+    let device_properties = unsafe { instance.get_physical_device_properties(device) };
+    let device_features = unsafe { instance.get_physical_device_features(device) };
     let queue_families = find_queue_families(instance, surface_instance, surface, device)?;
 
     check_device_suitability(instance, device)?;
@@ -105,16 +105,18 @@ unsafe fn get_device_data(instance: &ash::Instance,
     })
 }
 
-unsafe fn check_device_suitability(instance: &ash::Instance,
-                                   device: vk::PhysicalDevice)
-                                   -> Result<()> {
+fn check_device_suitability(instance: &ash::Instance,
+                            device: vk::PhysicalDevice)
+                            -> Result<()> {
     check_device_available_extensions(instance, device)
 }
 
-unsafe fn get_set_of_available_device_extensions(instance: &ash::Instance,
-                                                 device: vk::PhysicalDevice)
-                                                 -> Result<HashSet<String>> {
-    instance.enumerate_device_extension_properties(device)?
+type ExtensionName = String;
+
+fn get_set_of_available_device_extensions(instance: &ash::Instance,
+                                          device: vk::PhysicalDevice)
+                                          -> Result<HashSet<ExtensionName>> {
+    unsafe { instance.enumerate_device_extension_properties(device)? }
         .into_iter()
         .map(|properties| {
             Ok(properties.extension_name_as_c_str()?
@@ -124,13 +126,13 @@ unsafe fn get_set_of_available_device_extensions(instance: &ash::Instance,
         .collect()
 }
 
-unsafe fn check_device_available_extensions(instance: &ash::Instance,
-                                            device: vk::PhysicalDevice)
-                                            -> Result<()> {
+fn check_device_available_extensions(instance: &ash::Instance,
+                                     device: vk::PhysicalDevice)
+                                     -> Result<()> {
     let set_of_available_extensions = get_set_of_available_device_extensions(instance,
                                                                              device)?;
     for extension in REQUIRED_EXTENSIONS.iter() {
-        let extension = CStr::from_ptr(*extension).to_str()?;
+        let extension = unsafe { CStr::from_ptr(*extension).to_str()? };
         if !set_of_available_extensions.contains(extension) {
             Err(PhysicalDeviceIsNotSuitable::new(
                 device,
@@ -152,13 +154,17 @@ fn score_device(device_properties: vk::PhysicalDeviceProperties,
     score
 }
 
-unsafe fn find_queue_families(instance: &ash::Instance,
-                              surface_instance: &ash::khr::surface::Instance,
-                              surface: vk::SurfaceKHR,
-                              device: vk::PhysicalDevice) -> Result<QueueFamilies> {
-    let queue_families = instance.get_physical_device_queue_family_properties(device);
-    let has_present_queue = |index| {
-        surface_instance.get_physical_device_surface_support(device, index as u32, surface)
+fn find_queue_families(instance: &ash::Instance,
+                       surface_instance: &ash::khr::surface::Instance,
+                       surface: vk::SurfaceKHR,
+                       device: vk::PhysicalDevice) -> Result<QueueFamilies> {
+    let queue_families = unsafe {
+        instance.get_physical_device_queue_family_properties(device)
+    };
+    let has_present_queue = |index| unsafe {
+        surface_instance.get_physical_device_surface_support(
+            device, index as u32, surface,
+        )
     };
 
     queue_families

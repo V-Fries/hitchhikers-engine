@@ -5,7 +5,6 @@ use ash::vk;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
-use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::{Window, WindowId};
 
 use std::ffi::CStr;
@@ -29,30 +28,23 @@ impl ApplicationHandler for Engine {
 
         let window_attributes = Window::default_attributes()
             .with_title(ENGINE_NAME);
-        self.window = Some(event_loop.create_window(window_attributes)
-            .expect("Failed to create window"));
-        let window = unsafe { self.window.as_ref().unwrap_unchecked() };
+        let window = event_loop.create_window(window_attributes)
+            .expect("Failed to create window");
 
-        let display_handle = window.display_handle()
-            .expect("Failed to get display handle from window");
-        let window_handle = window.window_handle()
-            .expect("Failed to get window handle");
+        let vulkan = Vulkan::new(&window)
+            .expect("Failed to init vulkan");
 
-        self.vulkan = Some(unsafe {
-            Vulkan::new(
-                display_handle.into(), window_handle.into(), window.inner_size(),
-            )
-                .expect("Failed to init vulkan")
-        });
+        self.vulkan = Some(vulkan);
+        self.window = Some(window);
     }
 
     fn window_event(&mut self,
                     event_loop: &ActiveEventLoop,
                     _id: WindowId,
                     event: WindowEvent) {
-        if self.window.is_none() {
+        let Some(window) = &self.window else {
             return;
-        }
+        };
 
         match event {
             WindowEvent::CloseRequested => {
@@ -60,7 +52,6 @@ impl ApplicationHandler for Engine {
                 self.window = None;
             }
             WindowEvent::RedrawRequested => {
-                let window = unsafe { self.window.as_ref().unwrap_unchecked() };
                 window.request_redraw();
             }
             _ => ()

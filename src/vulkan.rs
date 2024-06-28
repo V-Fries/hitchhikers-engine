@@ -8,7 +8,7 @@ mod builder;
 mod image_views;
 
 use ash::vk;
-use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use crate::utils::{PipeLine, Result};
 use crate::vulkan::builder::VulkanBuilder;
@@ -32,11 +32,12 @@ pub struct Vulkan {
 }
 
 impl Vulkan {
-    pub unsafe fn new(display_handle: RawDisplayHandle,
-                      window_handle: RawWindowHandle,
-                      window_inner_size: winit::dpi::PhysicalSize<u32>)
-                      -> Result<Self> {
-        VulkanBuilder::new(display_handle, window_handle, window_inner_size)?
+    pub fn new(window: &winit::window::Window)
+               -> Result<Self> {
+        let display_handle = window.display_handle()?.into();
+        let window_handle = window.window_handle()?.into();
+
+        VulkanBuilder::new(display_handle, window_handle, window.inner_size())?
             .build()
             .pipe(Ok)
     }

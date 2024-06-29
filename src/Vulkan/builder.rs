@@ -38,7 +38,7 @@ impl VulkanBuilder {
             .create_entry()?;
 
         #[cfg(feature = "validation_layers")] {
-            check_validation_layers(builder.get_entry())?;
+            check_validation_layers(builder.entry())?;
         }
 
         builder = builder.create_instance(display_handle)?;
@@ -65,15 +65,15 @@ impl VulkanBuilder {
     fn create_instance(mut self,
                        display_handle: RawDisplayHandle)
                        -> Result<Self> {
-        self.instance = create_instance(self.get_entry(), display_handle)?
+        self.instance = create_instance(self.entry(), display_handle)?
             .pipe(Some);
         Ok(self)
     }
 
     #[cfg(feature = "validation_layers")]
     fn create_debug_messenger(mut self) -> Result<Self> {
-        self.debug_messenger = setup_debug_messenger(self.get_entry(),
-                                                     self.get_instance())?
+        self.debug_messenger = setup_debug_messenger(self.entry(),
+                                                     self.instance())?
             .pipe(Some);
         Ok(self)
     }
@@ -84,8 +84,8 @@ impl VulkanBuilder {
                       -> Result<Self> {
         self.surface = unsafe {
             ash_window::create_surface(
-                self.get_entry(),
-                self.get_instance(),
+                self.entry(),
+                self.instance(),
                 display_handle,
                 window_handle,
                 None,
@@ -99,19 +99,19 @@ impl VulkanBuilder {
                      window_inner_size: winit::dpi::PhysicalSize<u32>)
                      -> Result<Self> {
         self.device_data = pick_physical_device(
-            self.get_entry(), self.get_instance(), self.get_surface(),
+            self.entry(), self.instance(), self.surface(),
             window_inner_size,
         )?
             .pipe(Some);
 
-        self.device = create_device(self.get_instance(), self.get_device_data())?
+        self.device = create_device(self.instance(), self.device_data())?
             .pipe(Some);
 
         Ok(self)
     }
 
     fn create_queues(mut self) -> Self {
-        self.queues = create_device_queue(self.get_device(), self.get_device_data())
+        self.queues = create_device_queue(self.device(), self.device_data())
             .pipe(Some);
         self
     }
@@ -120,15 +120,15 @@ impl VulkanBuilder {
         let swap_chain_builder = self.take_device_data().swap_chain_builder;
 
         self.swap_chain = swap_chain_builder.build(
-            self.get_instance(), self.get_surface(), self.get_device(),
+            self.instance(), self.surface(), self.device(),
         )?
             .pipe(Some);
 
         self.swap_chain_images = unsafe {
             ash::khr::swapchain::Device::new(
-                self.get_instance(), self.get_device(),
+                self.instance(), self.device(),
             )
-                .get_swapchain_images(self.get_swap_chain())?
+                .get_swapchain_images(self.swap_chain())?
                 .pipe(Some)
         };
 
@@ -138,9 +138,9 @@ impl VulkanBuilder {
     }
 
     fn create_image_views(mut self) -> VkResult<Self> {
-        self.image_views = create_image_views(self.get_device(),
-                                              self.get_swap_chain_images(),
-                                              self.get_swap_chain_format())?
+        self.image_views = create_image_views(self.device(),
+                                              self.swap_chain_images(),
+                                              self.swap_chain_format())?
             .pipe(Some);
         Ok(self)
     }
@@ -178,38 +178,38 @@ impl VulkanBuilder {
     }
 
 
-    fn get_entry(&self) -> &ash::Entry {
+    fn entry(&self) -> &ash::Entry {
         self.entry.as_ref()
             .expect("get_entry() was called before the value was initialised")
     }
 
-    fn get_instance(&self) -> &ash::Instance {
+    fn instance(&self) -> &ash::Instance {
         self.instance.as_ref()
             .expect("get_instance() was called before the value was initialised")
     }
 
     #[cfg(feature = "validation_layers")]
-    fn get_debug_messenger(&self) -> &vk::DebugUtilsMessengerEXT {
+    fn debug_messenger(&self) -> &vk::DebugUtilsMessengerEXT {
         self.debug_messenger.as_ref()
             .expect("get_debug_messenger() was called before the value was initialised")
     }
 
-    fn get_device(&self) -> &ash::Device {
+    fn device(&self) -> &ash::Device {
         self.device.as_ref()
             .expect("get_device() was called before the value was initialised")
     }
 
-    fn get_queues(&self) -> &device::Queues {
+    fn queues(&self) -> &device::Queues {
         self.queues.as_ref()
             .expect("get_queues() was called before the value was initialised")
     }
 
-    fn get_surface(&self) -> vk::SurfaceKHR {
+    fn surface(&self) -> vk::SurfaceKHR {
         self.surface
             .expect("get_surface() was called before the value was initialised")
     }
 
-    fn get_device_data(&self) -> &DeviceData {
+    fn device_data(&self) -> &DeviceData {
         self.device_data.as_ref()
             .expect("get_swap_chain_builder() was called before the value was initialised")
     }
@@ -219,22 +219,22 @@ impl VulkanBuilder {
             .expect("take_device_data() was called before the value was initialised")
     }
 
-    fn get_swap_chain(&self) -> vk::SwapchainKHR {
+    fn swap_chain(&self) -> vk::SwapchainKHR {
         self.swap_chain
             .expect("get_swap_chain() was called before the value was initialised")
     }
 
-    fn get_swap_chain_images(&self) -> &[vk::Image] {
+    fn swap_chain_images(&self) -> &[vk::Image] {
         self.swap_chain_images.as_ref()
             .expect("get_swap_chain_images() was called before the value was initialised")
     }
 
-    fn get_swap_chain_format(&self) -> vk::Format {
+    fn swap_chain_format(&self) -> vk::Format {
         self.swap_chain_format
             .expect("get_swap_chain_format() was called before the value was initialised")
     }
 
-    fn get_swap_chain_extent(&self) -> &vk::Extent2D {
+    fn swap_chain_extent(&self) -> &vk::Extent2D {
         self.swap_chain_extent.as_ref()
             .expect("get_swap_chain_extent() was called before the value was initialised")
     }
@@ -256,7 +256,7 @@ impl Drop for VulkanBuilder {
 impl VulkanBuilder {
     fn destroy_image_views(&mut self) {
         if let Some(image_views) = &self.image_views {
-            let device = self.get_device();
+            let device = self.device();
             for image_view in image_views {
                 unsafe { device.destroy_image_view(*image_view, None) };
             }
@@ -266,10 +266,7 @@ impl VulkanBuilder {
     fn destroy_swap_chain(&mut self) {
         if let Some(swap_chain) = self.swap_chain {
             unsafe {
-                ash::khr::swapchain::Device::new(
-                    self.instance.as_ref().unwrap(),
-                    self.device.as_ref().unwrap(),
-                )
+                ash::khr::swapchain::Device::new(self.instance(), self.device())
                     .destroy_swapchain(swap_chain, None);
             }
         }
@@ -285,8 +282,7 @@ impl VulkanBuilder {
     fn destroy_debug_messenger(&mut self) {
         if let Some(debug_messenger) = self.debug_messenger {
             unsafe {
-                ash::ext::debug_utils::Instance::new(self.entry.as_ref().unwrap(),
-                                                     self.instance.as_ref().unwrap())
+                ash::ext::debug_utils::Instance::new(self.entry(), self.instance())
                     .destroy_debug_utils_messenger(debug_messenger, None);
             }
         }
@@ -295,8 +291,7 @@ impl VulkanBuilder {
     fn destroy_surface(&mut self) {
         if let Some(surface) = self.surface {
             unsafe {
-                ash::khr::surface::Instance::new(self.entry.as_ref().unwrap(),
-                                                 self.instance.as_ref().unwrap())
+                ash::khr::surface::Instance::new(self.entry(), self.instance())
                     .destroy_surface(surface, None);
             }
         }

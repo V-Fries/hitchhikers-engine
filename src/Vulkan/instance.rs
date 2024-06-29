@@ -10,6 +10,8 @@ use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
 use winit::raw_window_handle::RawDisplayHandle;
 
+type ExtensionName = String;
+
 const REQUIRED_EXTENSIONS: &[&CStr] = &[
     vk::KHR_PORTABILITY_ENUMERATION_NAME,
     #[cfg(feature = "validation_layers")]
@@ -19,31 +21,16 @@ const REQUIRED_EXTENSIONS: &[&CStr] = &[
 pub fn create_instance(entry: &ash::Entry,
                        display_handle: RawDisplayHandle)
                        -> Result<ash::Instance> {
-    let available_extensions = get_set_of_available_extensions(entry)?;
-    let required_extensions = get_required_extensions(available_extensions,
-                                                      display_handle)?;
-
+    let required_extensions = get_required_extensions(entry, display_handle)?;
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
-
     unsafe { Ok(entry.create_instance(&create_info, None)?) }
 }
 
-fn get_set_of_available_extensions(entry: &ash::Entry)
-                                   -> Result<HashSet<String>> {
-    unsafe { entry.enumerate_instance_extension_properties(None)? }
-        .into_iter()
-        .map(|elem| {
-            Ok(elem.extension_name_as_c_str()?
-                .to_str()?
-                .to_string())
-        })
-        .collect()
-}
-
-fn get_required_extensions(available_extensions: HashSet<String>,
+fn get_required_extensions(entry: &ash::Entry,
                            display_handle: RawDisplayHandle)
                            -> Result<Vec<*const c_char>> {
+    let available_extensions = get_set_of_available_extensions(entry)?;
     let mut result = REQUIRED_EXTENSIONS
         .iter()
         .map(|extension| {
@@ -55,6 +42,18 @@ fn get_required_extensions(available_extensions: HashSet<String>,
         .collect::<Result<Vec<*const c_char>>>()?;
     result.extend(ash_window::enumerate_required_extensions(display_handle)?);
     Ok(result)
+}
+
+fn get_set_of_available_extensions(entry: &ash::Entry)
+                                   -> Result<HashSet<ExtensionName>> {
+    unsafe { entry.enumerate_instance_extension_properties(None)? }
+        .into_iter()
+        .map(|elem| {
+            Ok(elem.extension_name_as_c_str()?
+                .to_str()?
+                .to_string())
+        })
+        .collect()
 }
 
 fn get_app_info() -> vk::ApplicationInfo<'static> {

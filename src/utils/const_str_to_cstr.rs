@@ -2,15 +2,16 @@
 macro_rules! const_str_to_cstr {
     ($s:expr) => {{
         // Append null byte at compile time
-        const LEN: usize = $s.len() + 1;
+        const S: &str = $s;
+        const LEN: usize = S.len() + 1;
         const BYTES: &[u8; LEN] = &{
             let mut bytes = [0u8; LEN];
             let mut i = 0;
-            while i < $s.len() {
-                bytes[i] = $s.as_bytes()[i];
+            while i < S.len() {
+                bytes[i] = S.as_bytes()[i];
                 i += 1;
             }
-            bytes[$s.len()] = 0;
+            bytes[S.len()] = 0;
             bytes
         };
 

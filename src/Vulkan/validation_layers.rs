@@ -7,6 +7,8 @@ use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
 use crate::const_str_to_cstr;
 
+type LayerName = String;
+
 #[cfg(feature = "validation_layers")]
 pub const VALIDATION_LAYERS: &[*const c_char] = &[
     const_str_to_cstr!("VK_LAYER_KHRONOS_validation").as_ptr(),
@@ -25,7 +27,7 @@ pub fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
 }
 
 fn get_set_of_available_validation_layers(entry: &ash::Entry)
-                                          -> Result<HashSet<String>> {
+                                          -> Result<HashSet<LayerName>> {
     unsafe { entry.enumerate_instance_layer_properties()? }
         .into_iter()
         .map::<Result<String>, _>(|elem| {

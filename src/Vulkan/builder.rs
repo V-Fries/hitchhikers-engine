@@ -8,6 +8,7 @@ use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_mess
 use crate::utils::{PipeLine, Result};
 use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device};
 use crate::vulkan::image_views::create_image_views;
+use crate::vulkan::shader::{FRAG_SHADER_PATH, ShaderModule, VERT_SHADER_PATH};
 
 #[derive(Default)]
 pub struct VulkanBuilder {
@@ -53,6 +54,7 @@ impl VulkanBuilder {
             .create_queues()
             .create_swap_chain()?
             .create_image_views()?
+            .create_graphics_pipeline()?
             .pipe(Ok)
     }
 
@@ -142,6 +144,15 @@ impl VulkanBuilder {
                                               self.swap_chain_images(),
                                               self.swap_chain_format())?
             .pipe(Some);
+        Ok(self)
+    }
+
+    fn create_graphics_pipeline(self) -> Result<Self> {
+        let vert_shader_module = ShaderModule::new(self.device(), VERT_SHADER_PATH)?;
+        let frag_shader_module = ShaderModule::new(self.device(), FRAG_SHADER_PATH)?;
+
+        drop(vert_shader_module);
+        drop(frag_shader_module);
         Ok(self)
     }
 

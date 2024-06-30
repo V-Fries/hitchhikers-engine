@@ -76,6 +76,6 @@ fn get_create_info<'a>(required_extensions: &'a [*const c_char],
         return create_info.enabled_layer_names(VALIDATION_LAYERS);
     }
     #[cfg(not(feature = "validation_layers"))] {
-        return create_info;
+        create_info
     }
 }

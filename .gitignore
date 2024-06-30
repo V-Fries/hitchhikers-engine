@@ -1,6 +1,9 @@
 # Rust
 /target
 
+# Compiled shaders
+shaders/build/
+
 # MacOS
 .DS_Store
 

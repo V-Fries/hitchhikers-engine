@@ -6,6 +6,7 @@ mod device;
 mod swap_chain;
 mod builder;
 mod image_views;
+mod shader;
 
 use ash::vk;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};

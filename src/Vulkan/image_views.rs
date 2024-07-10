@@ -2,10 +2,10 @@ use ash::prelude::VkResult;
 use ash::vk;
 
 pub fn create_image_views(device: &ash::Device,
-                          swap_chain_images: &[vk::Image],
+                          swapchain_images: &[vk::Image],
                           format: vk::Format)
                           -> VkResult<Vec<vk::ImageView>> {
-    swap_chain_images
+    swapchain_images
         .iter()
         .map(|image| {
             let create_info = get_image_view_create_info(*image, format);

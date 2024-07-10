@@ -26,7 +26,7 @@ const PREFERED_IMAGE_COUNT: u32 = 3;
 
 const NUMBER_OF_QUEUES_WORKING_ON_IMAGES: usize = 2;
 
-pub struct SwapChainBuilder {
+pub struct SwapchainBuilder {
     capabilities: vk::SurfaceCapabilitiesKHR,
     pub format: vk::SurfaceFormatKHR,
     present_mode: vk::PresentModeKHR,
@@ -35,7 +35,7 @@ pub struct SwapChainBuilder {
     queues_working_on_images: [u32; NUMBER_OF_QUEUES_WORKING_ON_IMAGES],
 }
 
-impl SwapChainBuilder {
+impl SwapchainBuilder {
     pub fn new(device: vk::PhysicalDevice,
                queue_family: QueueFamilies,
                surface_instance: &ash::khr::surface::Instance,

@@ -7,8 +7,8 @@ use crate::vulkan::instance::create_instance;
 use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
 use crate::utils::{PipeLine, Result};
 use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device};
+use super::graphics_pipeline::create_graphics_pipeline;
 use crate::vulkan::image_views::create_image_views;
-use crate::vulkan::shader::{FRAG_SHADER_PATH, ShaderModule, VERT_SHADER_PATH};
 
 #[derive(Default)]
 pub struct VulkanBuilder {
@@ -23,11 +23,15 @@ pub struct VulkanBuilder {
 
     surface: Option<vk::SurfaceKHR>,
 
-    swap_chain: Option<vk::SwapchainKHR>,
-    swap_chain_images: Option<Vec<vk::Image>>,
-    swap_chain_format: Option<vk::Format>,
-    swap_chain_extent: Option<vk::Extent2D>,
+    swapchain: Option<vk::SwapchainKHR>,
+    swapchain_images: Option<Vec<vk::Image>>,
+    swapchain_format: Option<vk::Format>,
+    swapchain_extent: Option<vk::Extent2D>,
     image_views: Option<Vec<vk::ImageView>>,
+
+    render_pass: Option<vk::RenderPass>,
+    pipeline_layout: Option<vk::PipelineLayout>,
+    pipeline: Option<vk::Pipeline>,
 }
 
 impl VulkanBuilder {
@@ -52,8 +56,9 @@ impl VulkanBuilder {
             .create_surface(display_handle, window_handle)?
             .create_device(window_inner_size)?
             .create_queues()
-            .create_swap_chain()?
+            .create_swapchain()?
             .create_image_views()?
+            .create_render_pass()?
             .create_graphics_pipeline()?
             .pipe(Ok)
     }
@@ -118,41 +123,70 @@ impl VulkanBuilder {
         self
     }
 
-    fn create_swap_chain(mut self) -> Result<Self> {
-        let swap_chain_builder = self.take_device_data().swap_chain_builder;
+    fn create_swapchain(mut self) -> Result<Self> {
+        let swapchain_builder = self.take_device_data().swapchain_builder;
 
-        self.swap_chain = swap_chain_builder.build(
+        self.swapchain = swapchain_builder.build(
             self.instance(), self.surface(), self.device(),
         )?
             .pipe(Some);
 
-        self.swap_chain_images = unsafe {
-            ash::khr::swapchain::Device::new(
-                self.instance(), self.device(),
-            )
-                .get_swapchain_images(self.swap_chain())?
+        self.swapchain_images = unsafe {
+            ash::khr::swapchain::Device::new(self.instance(), self.device())
+                .get_swapchain_images(self.swapchain())?
                 .pipe(Some)
         };
 
-        self.swap_chain_format = Some(swap_chain_builder.format.format);
-        self.swap_chain_extent = Some(swap_chain_builder.extent);
+        self.swapchain_format = Some(swapchain_builder.format.format);
+        self.swapchain_extent = Some(swapchain_builder.extent);
         Ok(self)
     }
 
     fn create_image_views(mut self) -> VkResult<Self> {
         self.image_views = create_image_views(self.device(),
-                                              self.swap_chain_images(),
-                                              self.swap_chain_format())?
+                                              self.swapchain_images(),
+                                              self.swapchain_format())?
             .pipe(Some);
         Ok(self)
     }
 
-    fn create_graphics_pipeline(self) -> Result<Self> {
-        let vert_shader_module = ShaderModule::new(self.device(), VERT_SHADER_PATH)?;
-        let frag_shader_module = ShaderModule::new(self.device(), FRAG_SHADER_PATH)?;
+    fn create_render_pass(mut self) -> Result<Self> {
+        // TODO refactor
+        let attachment_description = [vk::AttachmentDescription::default()
+            .format(self.swapchain_format())
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
 
-        drop(vert_shader_module);
-        drop(frag_shader_module);
+        let color_attachment = [vk::AttachmentReference::default()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+
+        let subpass = [vk::SubpassDescription::default()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .color_attachments(&color_attachment)];
+
+        let render_pass_create_info = vk::RenderPassCreateInfo::default()
+            .attachments(&attachment_description)
+            .subpasses(&subpass);
+
+        self.render_pass = unsafe {
+            self.device().create_render_pass(&render_pass_create_info, None)?
+        }.pipe(Some);
+
+        Ok(self)
+    }
+
+    fn create_graphics_pipeline(mut self) -> Result<Self> {
+        let (pipeline_layout, pipeline) = create_graphics_pipeline(
+            self.device(), self.swapchain_extent(), self.render_pass(),
+        )?;
+        self.pipeline_layout = Some(pipeline_layout);
+        self.pipeline = Some(pipeline);
         Ok(self)
     }
 
@@ -175,54 +209,50 @@ impl VulkanBuilder {
             surface: self.surface.take()
                 .expect("Vulkan surface was not initialised"),
 
-            swap_chain: self.swap_chain.take()
-                .expect("Vulkan swap_chain was not initialised"),
-            swap_chain_images: self.swap_chain_images.take()
-                .expect("Vulkan swap_chain_images was not initialised"),
-            swap_chain_format: self.swap_chain_format.take()
-                .expect("Vulkan swap_chain_format was not initialised"),
-            swap_chain_extent: self.swap_chain_extent.take()
-                .expect("Vulkan swap_chain_extent was not initialised"),
+            swapchain: self.swapchain.take()
+                .expect("Vulkan swapchain was not initialised"),
+            swapchain_images: self.swapchain_images.take()
+                .expect("Vulkan swapchain_images was not initialised"),
+            swapchain_format: self.swapchain_format.take()
+                .expect("Vulkan swapchain_format was not initialised"),
+            swapchain_extent: self.swapchain_extent.take()
+                .expect("Vulkan swapchain_extent was not initialised"),
             image_views: self.image_views.take()
                 .expect("Vulkan image_views was not initialised"),
+
+            render_pass: self.render_pass.take()
+                .expect("Vulkan render_pass was not initialised"),
+            pipeline_layout: self.pipeline_layout.take()
+                .expect("Vulkan pipeline_layout was not initialised"),
+            pipeline: self.pipeline.take()
+                .expect("Vulkan pipeline was not initialised"),
         }
     }
 
 
     fn entry(&self) -> &ash::Entry {
         self.entry.as_ref()
-            .expect("get_entry() was called before the value was initialised")
+            .expect("entry() was called before the value was initialised")
     }
 
     fn instance(&self) -> &ash::Instance {
         self.instance.as_ref()
-            .expect("get_instance() was called before the value was initialised")
-    }
-
-    #[cfg(feature = "validation_layers")]
-    fn debug_messenger(&self) -> &vk::DebugUtilsMessengerEXT {
-        self.debug_messenger.as_ref()
-            .expect("get_debug_messenger() was called before the value was initialised")
+            .expect("instance() was called before the value was initialised")
     }
 
     fn device(&self) -> &ash::Device {
         self.device.as_ref()
-            .expect("get_device() was called before the value was initialised")
-    }
-
-    fn queues(&self) -> &device::Queues {
-        self.queues.as_ref()
-            .expect("get_queues() was called before the value was initialised")
+            .expect("device() was called before the value was initialised")
     }
 
     fn surface(&self) -> vk::SurfaceKHR {
         self.surface
-            .expect("get_surface() was called before the value was initialised")
+            .expect("surface() was called before the value was initialised")
     }
 
     fn device_data(&self) -> &DeviceData {
         self.device_data.as_ref()
-            .expect("get_swap_chain_builder() was called before the value was initialised")
+            .expect("swapchain_builder() was called before the value was initialised")
     }
 
     fn take_device_data(&mut self) -> DeviceData {
@@ -230,31 +260,39 @@ impl VulkanBuilder {
             .expect("take_device_data() was called before the value was initialised")
     }
 
-    fn swap_chain(&self) -> vk::SwapchainKHR {
-        self.swap_chain
-            .expect("get_swap_chain() was called before the value was initialised")
+    fn swapchain(&self) -> vk::SwapchainKHR {
+        self.swapchain
+            .expect("swapchain() was called before the value was initialised")
     }
 
-    fn swap_chain_images(&self) -> &[vk::Image] {
-        self.swap_chain_images.as_ref()
-            .expect("get_swap_chain_images() was called before the value was initialised")
+    fn swapchain_images(&self) -> &[vk::Image] {
+        self.swapchain_images.as_ref()
+            .expect("swapchain_images() was called before the value was initialised")
     }
 
-    fn swap_chain_format(&self) -> vk::Format {
-        self.swap_chain_format
-            .expect("get_swap_chain_format() was called before the value was initialised")
+    fn swapchain_format(&self) -> vk::Format {
+        self.swapchain_format
+            .expect("swapchain_format() was called before the value was initialised")
     }
 
-    fn swap_chain_extent(&self) -> &vk::Extent2D {
-        self.swap_chain_extent.as_ref()
-            .expect("get_swap_chain_extent() was called before the value was initialised")
+    fn swapchain_extent(&self) -> &vk::Extent2D {
+        self.swapchain_extent.as_ref()
+            .expect("swapchain_extent() was called before the value was initialised")
+    }
+
+    fn render_pass(&self) -> vk::RenderPass {
+        self.render_pass
+            .expect("render_pass() was called before the value was initialised")
     }
 }
 
 impl Drop for VulkanBuilder {
     fn drop(&mut self) {
+        self.destroy_pipeline();
+        self.destroy_pipeline_layout();
+        self.destroy_render_pass();
         self.destroy_image_views();
-        self.destroy_swap_chain();
+        self.destroy_swapchain();
         self.destroy_device();
         #[cfg(feature = "validation_layers")] {
             self.destroy_debug_messenger();
@@ -265,6 +303,24 @@ impl Drop for VulkanBuilder {
 }
 
 impl VulkanBuilder {
+    fn destroy_pipeline(&mut self) {
+        if let Some(pipeline) = self.pipeline {
+            unsafe { self.device().destroy_pipeline(pipeline, None) };
+        }
+    }
+
+    fn destroy_pipeline_layout(&mut self) {
+        if let Some(pipeline_layout) = self.pipeline_layout {
+            unsafe { self.device().destroy_pipeline_layout(pipeline_layout, None) };
+        }
+    }
+
+    fn destroy_render_pass(&mut self) {
+        if let Some(render_pass) = self.render_pass {
+            unsafe { self.device().destroy_render_pass(render_pass, None) };
+        }
+    }
+
     fn destroy_image_views(&mut self) {
         if let Some(image_views) = &self.image_views {
             let device = self.device();
@@ -274,11 +330,11 @@ impl VulkanBuilder {
         }
     }
 
-    fn destroy_swap_chain(&mut self) {
-        if let Some(swap_chain) = self.swap_chain {
+    fn destroy_swapchain(&mut self) {
+        if let Some(swapchain) = self.swapchain {
             unsafe {
                 ash::khr::swapchain::Device::new(self.instance(), self.device())
-                    .destroy_swapchain(swap_chain, None);
+                    .destroy_swapchain(swapchain, None);
             }
         }
     }

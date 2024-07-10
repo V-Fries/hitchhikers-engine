@@ -55,3 +55,7 @@ error_struct!(FailedToReadShaderCode {
 error_struct!(ShaderCodeBadLen {
     shader_file_path: &'static str,
 }, "The number of bytes in the \"{}\" shader is not a multiple of 4", shader_file_path);
+
+error_struct!(FailedToCreatePipeline {
+    error: (Vec<ash::vk::Pipeline>, ash::vk::Result),
+}, "Failed to create pipeline: {:?}", error);

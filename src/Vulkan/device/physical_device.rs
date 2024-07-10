@@ -5,7 +5,7 @@ use crate::vulkan::errors::{NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitabl
 use ash::vk;
 
 use crate::utils::{GetAllUniques, PipeLine, Result};
-use crate::vulkan::swap_chain::SwapChainBuilder;
+use crate::vulkan::swapchain::SwapchainBuilder;
 use super::device::REQUIRED_EXTENSIONS;
 
 #[derive(Ord, Eq, PartialEq, PartialOrd)]
@@ -14,7 +14,7 @@ struct DeviceScore(u32);
 pub struct DeviceData {
     pub physical_device: vk::PhysicalDevice,
     pub queue_families: QueueFamilies,
-    pub swap_chain_builder: SwapChainBuilder,
+    pub swapchain_builder: SwapchainBuilder,
     score: DeviceScore,
 }
 
@@ -92,7 +92,7 @@ fn get_device_data(instance: &ash::Instance,
 
     check_device_suitability(instance, device)?;
 
-    let swap_chain_builder = SwapChainBuilder::new(
+    let swapchain_builder = SwapchainBuilder::new(
         device, queue_families, surface_instance, surface, window_inner_size,
     )?;
     let score = score_device(device_properties, device_features);
@@ -100,7 +100,7 @@ fn get_device_data(instance: &ash::Instance,
     Ok(DeviceData {
         physical_device: device,
         queue_families,
-        swap_chain_builder,
+        swapchain_builder,
         score,
     })
 }

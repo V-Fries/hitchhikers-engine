@@ -5,13 +5,12 @@ use crate::utils::Result;
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
-use crate::const_str_to_cstr;
 
 type LayerName = String;
 
 #[cfg(feature = "validation_layers")]
 pub const VALIDATION_LAYERS: &[*const c_char] = &[
-    const_str_to_cstr!("VK_LAYER_KHRONOS_validation").as_ptr(),
+    c"VK_LAYER_KHRONOS_validation".as_ptr(),
 ];
 
 pub fn check_validation_layers(entry: &ash::Entry) -> Result<()> {

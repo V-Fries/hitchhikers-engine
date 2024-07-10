@@ -3,10 +3,10 @@ mod errors;
 mod validation_layers;
 mod instance;
 mod device;
-mod swap_chain;
+mod swapchain;
 mod builder;
 mod image_views;
-mod shader;
+mod graphics_pipeline;
 
 use ash::vk;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -25,11 +25,15 @@ pub struct Vulkan {
 
     surface: vk::SurfaceKHR,
 
-    swap_chain: vk::SwapchainKHR,
-    swap_chain_images: Vec<vk::Image>,
-    swap_chain_format: vk::Format,
-    swap_chain_extent: vk::Extent2D,
+    swapchain: vk::SwapchainKHR,
+    swapchain_images: Vec<vk::Image>,
+    swapchain_format: vk::Format,
+    swapchain_extent: vk::Extent2D,
     image_views: Vec<vk::ImageView>,
+
+    render_pass: vk::RenderPass,
+    pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
 }
 
 impl Vulkan {
@@ -47,11 +51,14 @@ impl Vulkan {
 impl Drop for Vulkan {
     fn drop(&mut self) {
         unsafe {
+            self.device.destroy_pipeline(self.pipeline, None);
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_render_pass(self.render_pass, None);
             for image_view in self.image_views.iter() {
                 self.device.destroy_image_view(*image_view, None);
             }
             ash::khr::swapchain::Device::new(&self.instance, &self.device)
-                .destroy_swapchain(self.swap_chain, None);
+                .destroy_swapchain(self.swapchain, None);
             self.device.destroy_device(None);
             #[cfg(feature = "validation_layers")] {
                 ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)

@@ -29,11 +29,13 @@ pub struct Vulkan {
     swapchain_images: Vec<vk::Image>,
     swapchain_format: vk::Format,
     swapchain_extent: vk::Extent2D,
-    image_views: Vec<vk::ImageView>,
+    swapchain_image_views: Vec<vk::ImageView>,
 
     render_pass: vk::RenderPass,
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
+
+    framebuffers: Vec<vk::Framebuffer>,
 }
 
 impl Vulkan {
@@ -51,10 +53,13 @@ impl Vulkan {
 impl Drop for Vulkan {
     fn drop(&mut self) {
         unsafe {
+            for framebuffer in self.framebuffers.iter() {
+                self.device.destroy_framebuffer(*framebuffer, None);
+            }
             self.device.destroy_pipeline(self.pipeline, None);
             self.device.destroy_pipeline_layout(self.pipeline_layout, None);
             self.device.destroy_render_pass(self.render_pass, None);
-            for image_view in self.image_views.iter() {
+            for image_view in self.swapchain_image_views.iter() {
                 self.device.destroy_image_view(*image_view, None);
             }
             ash::khr::swapchain::Device::new(&self.instance, &self.device)

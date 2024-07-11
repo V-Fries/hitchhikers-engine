@@ -27,11 +27,13 @@ pub struct VulkanBuilder {
     swapchain_images: Option<Vec<vk::Image>>,
     swapchain_format: Option<vk::Format>,
     swapchain_extent: Option<vk::Extent2D>,
-    image_views: Option<Vec<vk::ImageView>>,
+    swapchain_image_views: Option<Vec<vk::ImageView>>,
 
     render_pass: Option<vk::RenderPass>,
     pipeline_layout: Option<vk::PipelineLayout>,
     pipeline: Option<vk::Pipeline>,
+
+    framebuffers: Option<Vec<vk::Framebuffer>>,
 }
 
 impl VulkanBuilder {
@@ -60,6 +62,7 @@ impl VulkanBuilder {
             .create_image_views()?
             .create_render_pass()?
             .create_graphics_pipeline()?
+            .create_framebuffers()?
             .pipe(Ok)
     }
 
@@ -143,9 +146,9 @@ impl VulkanBuilder {
     }
 
     fn create_image_views(mut self) -> VkResult<Self> {
-        self.image_views = create_image_views(self.device(),
-                                              self.swapchain_images(),
-                                              self.swapchain_format())?
+        self.swapchain_image_views = create_image_views(self.device(),
+                                                        self.swapchain_images(),
+                                                        self.swapchain_format())?
             .pipe(Some);
         Ok(self)
     }
@@ -190,6 +193,33 @@ impl VulkanBuilder {
         Ok(self)
     }
 
+    fn create_framebuffers(mut self) -> Result<Self> {
+        let mut framebuffers = Vec::with_capacity(self.swapchain_image_views().len());
+
+        for image in self.swapchain_image_views().iter() {
+            let attachments = [*image];
+            let create_info = vk::FramebufferCreateInfo::default()
+                .render_pass(self.render_pass())
+                .attachments(&attachments)
+                .width(self.swapchain_extent().width)
+                .height(self.swapchain_extent().height)
+                .layers(1);
+            let framebuffer = unsafe {
+                self.device().create_framebuffer(&create_info, None)
+                    .map_err(|err| {
+                        for framebuffer in framebuffers.iter() {
+                            self.device().destroy_framebuffer(*framebuffer, None);
+                        }
+                        err
+                    })?
+            };
+            framebuffers.push(framebuffer);
+        }
+
+        self.framebuffers = Some(framebuffers);
+        Ok(self)
+    }
+
 
     pub fn build(mut self) -> Vulkan {
         Vulkan {
@@ -217,7 +247,7 @@ impl VulkanBuilder {
                 .expect("Vulkan swapchain_format was not initialised"),
             swapchain_extent: self.swapchain_extent.take()
                 .expect("Vulkan swapchain_extent was not initialised"),
-            image_views: self.image_views.take()
+            swapchain_image_views: self.swapchain_image_views.take()
                 .expect("Vulkan image_views was not initialised"),
 
             render_pass: self.render_pass.take()
@@ -226,6 +256,9 @@ impl VulkanBuilder {
                 .expect("Vulkan pipeline_layout was not initialised"),
             pipeline: self.pipeline.take()
                 .expect("Vulkan pipeline was not initialised"),
+
+            framebuffers: self.framebuffers.take()
+                .expect("Vulkan swapchain_framebuffers was not initialised"),
         }
     }
 
@@ -280,6 +313,11 @@ impl VulkanBuilder {
             .expect("swapchain_extent() was called before the value was initialised")
     }
 
+    fn swapchain_image_views(&self) -> &[vk::ImageView] {
+        self.swapchain_image_views.as_ref()
+            .expect("swapchain_image_views() was called before the value was initialised")
+    }
+
     fn render_pass(&self) -> vk::RenderPass {
         self.render_pass
             .expect("render_pass() was called before the value was initialised")
@@ -288,6 +326,7 @@ impl VulkanBuilder {
 
 impl Drop for VulkanBuilder {
     fn drop(&mut self) {
+        self.destroy_framebuffers();
         self.destroy_pipeline();
         self.destroy_pipeline_layout();
         self.destroy_render_pass();
@@ -303,35 +342,43 @@ impl Drop for VulkanBuilder {
 }
 
 impl VulkanBuilder {
+    fn destroy_framebuffers(&mut self) {
+        if let Some(framebuffers) = self.framebuffers.take() {
+            for framebuffer in framebuffers {
+                unsafe { self.device().destroy_framebuffer(framebuffer, None) };
+            }
+        }
+    }
+
     fn destroy_pipeline(&mut self) {
-        if let Some(pipeline) = self.pipeline {
+        if let Some(pipeline) = self.pipeline.take() {
             unsafe { self.device().destroy_pipeline(pipeline, None) };
         }
     }
 
     fn destroy_pipeline_layout(&mut self) {
-        if let Some(pipeline_layout) = self.pipeline_layout {
+        if let Some(pipeline_layout) = self.pipeline_layout.take() {
             unsafe { self.device().destroy_pipeline_layout(pipeline_layout, None) };
         }
     }
 
     fn destroy_render_pass(&mut self) {
-        if let Some(render_pass) = self.render_pass {
+        if let Some(render_pass) = self.render_pass.take() {
             unsafe { self.device().destroy_render_pass(render_pass, None) };
         }
     }
 
     fn destroy_image_views(&mut self) {
-        if let Some(image_views) = &self.image_views {
+        if let Some(image_views) = self.swapchain_image_views.take() {
             let device = self.device();
             for image_view in image_views {
-                unsafe { device.destroy_image_view(*image_view, None) };
+                unsafe { device.destroy_image_view(image_view, None) };
             }
         }
     }
 
     fn destroy_swapchain(&mut self) {
-        if let Some(swapchain) = self.swapchain {
+        if let Some(swapchain) = self.swapchain.take() {
             unsafe {
                 ash::khr::swapchain::Device::new(self.instance(), self.device())
                     .destroy_swapchain(swapchain, None);
@@ -340,14 +387,14 @@ impl VulkanBuilder {
     }
 
     fn destroy_device(&mut self) {
-        if let Some(device) = &self.device {
+        if let Some(device) = &self.device.take() {
             unsafe { device.destroy_device(None) };
         }
     }
 
     #[cfg(feature = "validation_layers")]
     fn destroy_debug_messenger(&mut self) {
-        if let Some(debug_messenger) = self.debug_messenger {
+        if let Some(debug_messenger) = self.debug_messenger.take() {
             unsafe {
                 ash::ext::debug_utils::Instance::new(self.entry(), self.instance())
                     .destroy_debug_utils_messenger(debug_messenger, None);
@@ -356,7 +403,7 @@ impl VulkanBuilder {
     }
 
     fn destroy_surface(&mut self) {
-        if let Some(surface) = self.surface {
+        if let Some(surface) = self.surface.take() {
             unsafe {
                 ash::khr::surface::Instance::new(self.entry(), self.instance())
                     .destroy_surface(surface, None);
@@ -365,7 +412,7 @@ impl VulkanBuilder {
     }
 
     fn destroy_instance(&mut self) {
-        if let Some(instance) = &self.instance {
+        if let Some(instance) = &self.instance.take() {
             unsafe { instance.destroy_instance(None) };
         }
     }

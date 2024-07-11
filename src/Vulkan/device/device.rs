@@ -3,6 +3,7 @@ use ash::vk;
 
 use super::physical_device::DeviceData;
 use crate::utils::{PipeLine, Result};
+use crate::vulkan::device::QueueFamilies;
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
     vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr(),
@@ -38,12 +39,13 @@ pub fn create_device(instance: &ash::Instance,
 }
 
 pub fn create_device_queue(device: &ash::Device,
-                           device_data: &DeviceData) -> Queues {
+                           queue_families: &QueueFamilies)
+                           -> Queues {
     let graphics_queue = unsafe {
-        device.get_device_queue(device_data.queue_families.graphics_index, 0)
+        device.get_device_queue(queue_families.graphics_index, 0)
     };
     let present_queue = unsafe {
-        device.get_device_queue(device_data.queue_families.graphics_index, 0)
+        device.get_device_queue(queue_families.graphics_index, 0)
     };
     Queues { graphics_queue, present_queue }
 }

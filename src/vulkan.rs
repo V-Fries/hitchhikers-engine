@@ -36,6 +36,9 @@ pub struct Vulkan {
     pipeline: vk::Pipeline,
 
     framebuffers: Vec<vk::Framebuffer>,
+
+    command_pool: vk::CommandPool,
+    command_buffer: vk::CommandBuffer,
 }
 
 impl Vulkan {
@@ -48,11 +51,65 @@ impl Vulkan {
             .build()
             .pipe(Ok)
     }
+
+    fn record_command_buffer(&self, image_index: usize) -> Result<()> {
+        // TODO refactor
+        let begin_info = vk::CommandBufferBeginInfo::default();
+
+        unsafe {
+            self.device.begin_command_buffer(self.command_buffer, &begin_info)?;
+        }
+
+        let clear_values = [
+            vk::ClearValue {
+                // TODO check if I should use float32
+                color: vk::ClearColorValue { uint32: [0, 0, 0, 1] }
+            }
+        ];
+        let render_pass_begin_info = vk::RenderPassBeginInfo::default()
+            .render_pass(self.render_pass)
+            .framebuffer(self.framebuffers[image_index])
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: self.swapchain_extent,
+            })
+            .clear_values(&clear_values);
+
+        unsafe {
+            self.device.cmd_begin_render_pass(
+                self.command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE,
+            );
+
+            self.device.cmd_bind_pipeline(
+                self.command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline,
+            );
+        }
+
+        let viewports = [vk::Viewport::default()
+            .x(0.)
+            .y(0.)
+            .width(self.swapchain_extent.width as f32)
+            .height(self.swapchain_extent.height as f32)
+            .min_depth(0.)
+            .max_depth(1.)];
+        let scissors = [vk::Rect2D::default()
+            .offset(vk::Offset2D { x: 0, y: 0 })
+            .extent(self.swapchain_extent)];
+        unsafe {
+            self.device.cmd_set_viewport(self.command_buffer, 0, &viewports);
+            self.device.cmd_set_scissor(self.command_buffer, 0, &scissors);
+            self.device.cmd_draw(self.command_buffer, 3, 1, 0, 0);
+            self.device.cmd_end_render_pass(self.command_buffer);
+            self.device.end_command_buffer(self.command_buffer)?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Vulkan {
     fn drop(&mut self) {
         unsafe {
+            self.device.destroy_command_pool(self.command_pool, None);
             for framebuffer in self.framebuffers.iter() {
                 self.device.destroy_framebuffer(*framebuffer, None);
             }

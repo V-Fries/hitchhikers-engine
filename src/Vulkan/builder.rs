@@ -6,9 +6,10 @@ use crate::vulkan::instance::create_instance;
 #[cfg(feature = "validation_layers")]
 use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
 use crate::utils::{PipeLine, Result};
-use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device};
+use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device, QueueFamilies};
 use super::graphics_pipeline::create_graphics_pipeline;
 use crate::vulkan::image_views::create_image_views;
+use crate::vulkan::swapchain::SwapchainBuilder;
 
 #[derive(Default)]
 pub struct VulkanBuilder {
@@ -17,7 +18,8 @@ pub struct VulkanBuilder {
     #[cfg(feature = "validation_layers")]
     debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
-    device_data: Option<DeviceData>,
+    swapchain_builder: Option<SwapchainBuilder>,
+    queue_families: Option<QueueFamilies>,
     device: Option<ash::Device>,
     queues: Option<device::Queues>,
 
@@ -34,6 +36,9 @@ pub struct VulkanBuilder {
     pipeline: Option<vk::Pipeline>,
 
     framebuffers: Option<Vec<vk::Framebuffer>>,
+
+    command_pool: Option<vk::CommandPool>,
+    command_buffer: Option<vk::CommandBuffer>,
 }
 
 impl VulkanBuilder {
@@ -63,6 +68,8 @@ impl VulkanBuilder {
             .create_render_pass()?
             .create_graphics_pipeline()?
             .create_framebuffers()?
+            .create_command_pool()?
+            .create_command_buffer()?
             .pipe(Ok)
     }
 
@@ -108,26 +115,28 @@ impl VulkanBuilder {
     fn create_device(mut self,
                      window_inner_size: winit::dpi::PhysicalSize<u32>)
                      -> Result<Self> {
-        self.device_data = pick_physical_device(
+        let device_data = pick_physical_device(
             self.entry(), self.instance(), self.surface(),
             window_inner_size,
-        )?
+        )?;
+
+        self.device = create_device(self.instance(), &device_data)?
             .pipe(Some);
 
-        self.device = create_device(self.instance(), self.device_data())?
-            .pipe(Some);
+        self.queue_families = Some(device_data.queue_families);
+        self.swapchain_builder = Some(device_data.swapchain_builder);
 
         Ok(self)
     }
 
     fn create_queues(mut self) -> Self {
-        self.queues = create_device_queue(self.device(), self.device_data())
+        self.queues = create_device_queue(self.device(), self.queue_families())
             .pipe(Some);
         self
     }
 
     fn create_swapchain(mut self) -> Result<Self> {
-        let swapchain_builder = self.take_device_data().swapchain_builder;
+        let swapchain_builder = self.take_swapchain_builder();
 
         self.swapchain = swapchain_builder.build(
             self.instance(), self.surface(), self.device(),
@@ -220,6 +229,33 @@ impl VulkanBuilder {
         Ok(self)
     }
 
+    fn create_command_pool(mut self) -> Result<Self> {
+        let create_info = vk::CommandPoolCreateInfo::default()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(self.queue_families().graphics_index);
+
+        self.command_pool = unsafe {
+            self.device()
+                .create_command_pool(&create_info, None)?
+                .pipe(Some)
+        };
+        Ok(self)
+    }
+
+    fn create_command_buffer(mut self) -> Result<Self> {
+        let alloc_info = vk::CommandBufferAllocateInfo::default()
+            .command_pool(self.command_pool())
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+
+        self.command_buffer = unsafe {
+            self.device()
+                .allocate_command_buffers(&alloc_info)?[0]
+                .pipe(Some)
+        };
+        Ok(self)
+    }
+
 
     pub fn build(mut self) -> Vulkan {
         Vulkan {
@@ -259,6 +295,11 @@ impl VulkanBuilder {
 
             framebuffers: self.framebuffers.take()
                 .expect("Vulkan swapchain_framebuffers was not initialised"),
+
+            command_pool: self.command_pool.take()
+                .expect("Vulkan command_pool was not initialised"),
+            command_buffer: self.command_buffer.take()
+                .expect("Vulkan command_buffer was not initialised"),
         }
     }
 
@@ -270,62 +311,68 @@ impl VulkanBuilder {
 
     fn instance(&self) -> &ash::Instance {
         self.instance.as_ref()
-            .expect("instance() was called before the value was initialised")
+            .expect("instance() was called, but the value is at None")
     }
 
     fn device(&self) -> &ash::Device {
         self.device.as_ref()
-            .expect("device() was called before the value was initialised")
+            .expect("device() was called, but the value is at None")
     }
 
     fn surface(&self) -> vk::SurfaceKHR {
         self.surface
-            .expect("surface() was called before the value was initialised")
+            .expect("surface() was called, but the value is at None")
     }
 
-    fn device_data(&self) -> &DeviceData {
-        self.device_data.as_ref()
-            .expect("swapchain_builder() was called before the value was initialised")
+    fn take_swapchain_builder(&mut self) -> SwapchainBuilder {
+        self.swapchain_builder.take()
+            .expect("swapchain_builder() was called, but the value is at None")
     }
 
-    fn take_device_data(&mut self) -> DeviceData {
-        self.device_data.take()
-            .expect("take_device_data() was called before the value was initialised")
+    fn queue_families(&self) -> &QueueFamilies {
+        self.queue_families.as_ref()
+            .expect("queue_families() was called, but the value is at None")
     }
 
     fn swapchain(&self) -> vk::SwapchainKHR {
         self.swapchain
-            .expect("swapchain() was called before the value was initialised")
+            .expect("swapchain() was called, but the value is at None")
     }
 
     fn swapchain_images(&self) -> &[vk::Image] {
         self.swapchain_images.as_ref()
-            .expect("swapchain_images() was called before the value was initialised")
+            .expect("swapchain_images() was called, but the value is at None")
     }
 
     fn swapchain_format(&self) -> vk::Format {
         self.swapchain_format
-            .expect("swapchain_format() was called before the value was initialised")
+            .expect("swapchain_format() was called, but the value is at None")
     }
 
     fn swapchain_extent(&self) -> &vk::Extent2D {
         self.swapchain_extent.as_ref()
-            .expect("swapchain_extent() was called before the value was initialised")
+            .expect("swapchain_extent() was called, but the value is at None")
     }
 
     fn swapchain_image_views(&self) -> &[vk::ImageView] {
         self.swapchain_image_views.as_ref()
-            .expect("swapchain_image_views() was called before the value was initialised")
+            .expect("swapchain_image_views() was called, but the value is at None")
     }
 
     fn render_pass(&self) -> vk::RenderPass {
         self.render_pass
-            .expect("render_pass() was called before the value was initialised")
+            .expect("render_pass() was called, but the value is at None")
+    }
+
+    fn command_pool(&self) -> vk::CommandPool {
+        self.command_pool
+            .expect("command_pool() was called, but the value is at None")
     }
 }
 
 impl Drop for VulkanBuilder {
     fn drop(&mut self) {
+        self.destroy_command_pool();
         self.destroy_framebuffers();
         self.destroy_pipeline();
         self.destroy_pipeline_layout();
@@ -342,6 +389,12 @@ impl Drop for VulkanBuilder {
 }
 
 impl VulkanBuilder {
+    fn destroy_command_pool(&mut self) {
+        if let Some(command_pool) = self.command_pool.take() {
+            unsafe { self.device().destroy_command_pool(command_pool, None) };
+        }
+    }
+
     fn destroy_framebuffers(&mut self) {
         if let Some(framebuffers) = self.framebuffers.take() {
             for framebuffer in framebuffers {

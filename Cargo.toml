@@ -11,5 +11,5 @@ validation_layers = []
 ash = "0.38.0"
 
 # Window
-winit = "0.30.0"
+winit = "0.30.3"
 ash-window = "0.13.0"

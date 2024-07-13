@@ -22,7 +22,7 @@ run: compile_shaders
 .PHONY: run
 
 run_debug: compile_shaders
-	cargo r --features validation_layers
+	RUST_BACKTRACE=1 cargo r --features validation_layers
 .PHONY: run_debug
 
 debug: compile_shaders

@@ -8,6 +8,7 @@ mod builder;
 mod image_views;
 mod graphics_pipeline;
 
+use ash::prelude::VkResult;
 use ash::vk;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
@@ -25,6 +26,7 @@ pub struct Vulkan {
 
     surface: vk::SurfaceKHR,
 
+    swapchain_device: ash::khr::swapchain::Device,
     swapchain: vk::SwapchainKHR,
     swapchain_images: Vec<vk::Image>,
     swapchain_format: vk::Format,
@@ -39,6 +41,10 @@ pub struct Vulkan {
 
     command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
+
+    image_available_semaphore: vk::Semaphore,
+    render_finished_semaphore: vk::Semaphore,
+    in_flight_fence: vk::Fence,
 }
 
 impl Vulkan {
@@ -52,7 +58,7 @@ impl Vulkan {
             .pipe(Ok)
     }
 
-    fn record_command_buffer(&self, image_index: usize) -> Result<()> {
+    pub fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
         // TODO refactor
         let begin_info = vk::CommandBufferBeginInfo::default();
 
@@ -68,7 +74,7 @@ impl Vulkan {
         ];
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
             .render_pass(self.render_pass)
-            .framebuffer(self.framebuffers[image_index])
+            .framebuffer(self.framebuffers[image_index as usize])
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent: self.swapchain_extent,
@@ -104,11 +110,98 @@ impl Vulkan {
         }
         Ok(())
     }
+
+    pub fn in_flight_fence(&self) -> vk::Fence {
+        self.in_flight_fence
+    }
+
+    pub fn wait_for_fence(&self,
+                          fence: vk::Fence,
+                          timeout: u64,
+                          should_reset: bool)
+                          -> VkResult<()> {
+        unsafe {
+            let fences = [fence];
+            self.device.wait_for_fences(&fences, true, timeout)?;
+            if should_reset {
+                self.device.reset_fences(&fences)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn acquire_next_image(&self,
+                              timeout: u64,
+                              semaphore: vk::Semaphore,
+                              fence: vk::Fence)
+                              -> VkResult<u32> {
+        let index = unsafe {
+            self.swapchain_device.acquire_next_image(
+                self.swapchain, timeout, semaphore, fence,
+            )?.0
+        };
+        Ok(index)
+    }
+
+    pub fn image_available_semaphore(&self) -> vk::Semaphore {
+        self.image_available_semaphore
+    }
+
+    pub fn reset_command_buffer(&self) -> VkResult<()> {
+        unsafe {
+            self.device.reset_command_buffer(self.command_buffer,
+                                             vk::CommandBufferResetFlags::empty())
+        }
+    }
+
+    pub fn submit_command_buffer(&self) -> VkResult<()> {
+        let wait_semaphores = [self.image_available_semaphore];
+        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+        let command_buffers = [self.command_buffer];
+        let signal_semaphores = [self.render_finished_semaphore];
+
+        let submit_info = vk::SubmitInfo::default()
+            .wait_semaphores(&wait_semaphores)
+            .wait_dst_stage_mask(&wait_stages)
+            .command_buffers(&command_buffers)
+            .signal_semaphores(&signal_semaphores);
+
+        unsafe {
+            self.device.queue_submit(
+                self.queues.graphics_queue, &[submit_info], self.in_flight_fence,
+            )
+        }
+    }
+
+    pub fn present_image(&self, image_index: u32) -> VkResult<()> {
+        let wait_semaphores = [self.render_finished_semaphore];
+        let swapchains = [self.swapchain];
+        let image_indices = [image_index];
+
+        let present_info = vk::PresentInfoKHR::default()
+            .wait_semaphores(&wait_semaphores)
+            .swapchains(&swapchains)
+            .image_indices(&image_indices);
+
+        unsafe {
+            self.swapchain_device.queue_present(
+                self.queues.present_queue, &present_info,
+            ).map(|_| ())
+        }
+    }
 }
 
 impl Drop for Vulkan {
     fn drop(&mut self) {
         unsafe {
+            if let Err(err) = self.device.device_wait_idle() {
+                eprintln!("Failed to wait for vulkan device to be idle: {err}.
+                           Attempting to clean resources anyway...");
+            }
+
+            self.device.destroy_semaphore(self.image_available_semaphore, None);
+            self.device.destroy_semaphore(self.render_finished_semaphore, None);
+            self.device.destroy_fence(self.in_flight_fence, None);
             self.device.destroy_command_pool(self.command_pool, None);
             for framebuffer in self.framebuffers.iter() {
                 self.device.destroy_framebuffer(*framebuffer, None);
@@ -119,8 +212,7 @@ impl Drop for Vulkan {
             for image_view in self.swapchain_image_views.iter() {
                 self.device.destroy_image_view(*image_view, None);
             }
-            ash::khr::swapchain::Device::new(&self.instance, &self.device)
-                .destroy_swapchain(self.swapchain, None);
+            self.swapchain_device.destroy_swapchain(self.swapchain, None);
             self.device.destroy_device(None);
             #[cfg(feature = "validation_layers")] {
                 ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)

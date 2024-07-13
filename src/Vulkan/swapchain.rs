@@ -62,14 +62,17 @@ impl SwapchainBuilder {
                  instance: &ash::Instance,
                  surface: vk::SurfaceKHR,
                  device: &ash::Device)
-                 -> VkResult<vk::SwapchainKHR> {
+                 -> VkResult<(vk::SwapchainKHR, ash::khr::swapchain::Device)> {
         let unique_queues = self.queues_working_on_images.into_iter()
             .get_all_uniques::<Vec<_>>();
         let create_info = self.get_create_info(surface, &unique_queues);
 
+        let swapchain_device = ash::khr::swapchain::Device::new(instance, device);
         unsafe {
-            ash::khr::swapchain::Device::new(instance, device)
-                .create_swapchain(&create_info, None)
+            Ok((
+                swapchain_device.create_swapchain(&create_info, None)?,
+                swapchain_device
+            ))
         }
     }
 

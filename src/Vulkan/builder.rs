@@ -6,7 +6,7 @@ use crate::vulkan::instance::create_instance;
 #[cfg(feature = "validation_layers")]
 use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
 use crate::utils::{PipeLine, Result};
-use crate::vulkan::device::{create_device, create_device_queue, DeviceData, pick_physical_device, QueueFamilies};
+use crate::vulkan::device::{create_device, create_device_queue, pick_physical_device, QueueFamilies};
 use super::graphics_pipeline::create_graphics_pipeline;
 use crate::vulkan::image_views::create_image_views;
 use crate::vulkan::swapchain::SwapchainBuilder;
@@ -25,6 +25,7 @@ pub struct VulkanBuilder {
 
     surface: Option<vk::SurfaceKHR>,
 
+    swapchain_device: Option<ash::khr::swapchain::Device>,
     swapchain: Option<vk::SwapchainKHR>,
     swapchain_images: Option<Vec<vk::Image>>,
     swapchain_format: Option<vk::Format>,
@@ -39,6 +40,10 @@ pub struct VulkanBuilder {
 
     command_pool: Option<vk::CommandPool>,
     command_buffer: Option<vk::CommandBuffer>,
+
+    image_available_semaphore: Option<vk::Semaphore>,
+    render_finished_semaphore: Option<vk::Semaphore>,
+    in_flight_fence: Option<vk::Fence>,
 }
 
 impl VulkanBuilder {
@@ -70,6 +75,7 @@ impl VulkanBuilder {
             .create_framebuffers()?
             .create_command_pool()?
             .create_command_buffer()?
+            .create_sync_objects()?
             .pipe(Ok)
     }
 
@@ -138,10 +144,12 @@ impl VulkanBuilder {
     fn create_swapchain(mut self) -> Result<Self> {
         let swapchain_builder = self.take_swapchain_builder();
 
-        self.swapchain = swapchain_builder.build(
+        let (swapchain, swapchain_device) = swapchain_builder.build(
             self.instance(), self.surface(), self.device(),
-        )?
-            .pipe(Some);
+        )?;
+
+        self.swapchain = Some(swapchain);
+        self.swapchain_device = Some(swapchain_device);
 
         self.swapchain_images = unsafe {
             ash::khr::swapchain::Device::new(self.instance(), self.device())
@@ -182,9 +190,18 @@ impl VulkanBuilder {
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(&color_attachment)];
 
+        let dependencies = [vk::SubpassDependency::default()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)];
+
         let render_pass_create_info = vk::RenderPassCreateInfo::default()
             .attachments(&attachment_description)
-            .subpasses(&subpass);
+            .subpasses(&subpass)
+            .dependencies(&dependencies);
 
         self.render_pass = unsafe {
             self.device().create_render_pass(&render_pass_create_info, None)?
@@ -256,6 +273,27 @@ impl VulkanBuilder {
         Ok(self)
     }
 
+    fn create_sync_objects(mut self) -> Result<Self> {
+        let semaphore_create_info = vk::SemaphoreCreateInfo::default();
+        self.image_available_semaphore = unsafe {
+            self.device().create_semaphore(&semaphore_create_info, None)?
+                .pipe(Some)
+        };
+        self.render_finished_semaphore = unsafe {
+            self.device().create_semaphore(&semaphore_create_info, None)?
+                .pipe(Some)
+        };
+
+        let fence_create_info = vk::FenceCreateInfo::default()
+            .flags(vk::FenceCreateFlags::SIGNALED);
+        self.in_flight_fence = unsafe {
+            self.device().create_fence(&fence_create_info, None)?
+                .pipe(Some)
+        };
+
+        Ok(self)
+    }
+
 
     pub fn build(mut self) -> Vulkan {
         Vulkan {
@@ -275,6 +313,8 @@ impl VulkanBuilder {
             surface: self.surface.take()
                 .expect("Vulkan surface was not initialised"),
 
+            swapchain_device: self.swapchain_device.take()
+                .expect("Vulkan swapchain_device was not initialised"),
             swapchain: self.swapchain.take()
                 .expect("Vulkan swapchain was not initialised"),
             swapchain_images: self.swapchain_images.take()
@@ -300,6 +340,13 @@ impl VulkanBuilder {
                 .expect("Vulkan command_pool was not initialised"),
             command_buffer: self.command_buffer.take()
                 .expect("Vulkan command_buffer was not initialised"),
+
+            image_available_semaphore: self.image_available_semaphore.take()
+                .expect("Vulkan image_available_semaphore was not initialised"),
+            render_finished_semaphore: self.render_finished_semaphore.take()
+                .expect("Vulkan render_finished_semaphore was not initialised"),
+            in_flight_fence: self.in_flight_fence.take()
+                .expect("Vulkan in_flight_fence was not initialised"),
         }
     }
 
@@ -372,6 +419,7 @@ impl VulkanBuilder {
 
 impl Drop for VulkanBuilder {
     fn drop(&mut self) {
+        self.destroy_sync_objects();
         self.destroy_command_pool();
         self.destroy_framebuffers();
         self.destroy_pipeline();
@@ -389,6 +437,30 @@ impl Drop for VulkanBuilder {
 }
 
 impl VulkanBuilder {
+    fn destroy_sync_objects(&mut self) {
+        if let Some(device) = &self.device {
+            Self::destroy_semaphore(self.image_available_semaphore.take(), device);
+            Self::destroy_semaphore(self.render_finished_semaphore.take(), device);
+            Self::destroy_fence(self.in_flight_fence.take(), device);
+        }
+    }
+
+    fn destroy_semaphore(semaphore: Option<vk::Semaphore>, device: &ash::Device) {
+        if let Some(semaphore) = semaphore {
+            unsafe {
+                device.destroy_semaphore(semaphore, None);
+            }
+        }
+    }
+
+    fn destroy_fence(fence: Option<vk::Fence>, device: &ash::Device) {
+        if let Some(fence) = fence {
+            unsafe {
+                device.destroy_fence(fence, None);
+            }
+        }
+    }
+
     fn destroy_command_pool(&mut self) {
         if let Some(command_pool) = self.command_pool.take() {
             unsafe { self.device().destroy_command_pool(command_pool, None) };

@@ -3,7 +3,9 @@ mod result;
 mod get_all_uniques;
 mod pipe_line;
 mod error_creator;
+mod take_vec;
 
 pub use result::Result;
 pub use get_all_uniques::GetAllUniques;
 pub use pipe_line::PipeLine;
+pub use take_vec::TakeVec;

@@ -3,7 +3,7 @@ use ash::vk;
 
 use super::physical_device::DeviceData;
 use crate::utils::{PipeLine, Result};
-use crate::vulkan::device::QueueFamilies;
+use crate::vulkan_renderer::device::QueueFamilies;
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
     vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr(),

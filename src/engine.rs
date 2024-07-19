@@ -9,7 +9,7 @@ use winit::window::Window;
 use crate::utils::Result;
 use crate::const_str_to_cstr;
 use crate::engine::errors::{FailedToCreateWindow, FailedToInitVulkan};
-use crate::vulkan::Vulkan;
+use crate::vulkan_renderer::VulkanRenderer;
 
 pub const ENGINE_NAME: &str = "HitchHiker's Engine";
 pub const ENGINE_NAME_CSTR: &CStr = const_str_to_cstr!(ENGINE_NAME);
@@ -17,7 +17,7 @@ pub const ENGINE_NAME_CSTR: &CStr = const_str_to_cstr!(ENGINE_NAME);
 pub const ENGINE_VERSION: u32 = vk::make_api_version(0, 0, 0, 0);
 
 pub struct Engine {
-    vulkan: Vulkan,
+    vulkan_renderer: VulkanRenderer,
     window: Window,
 }
 
@@ -30,23 +30,14 @@ impl Engine {
             .map_err(FailedToCreateWindow::new)?;
 
         Ok(Self {
-            vulkan: Vulkan::new(&window).map_err(FailedToInitVulkan::new)?,
+            vulkan_renderer: VulkanRenderer::new(&window, 2)
+                .map_err(FailedToInitVulkan::new)?,
             window,
         })
     }
 
     pub fn render_frame(&mut self) -> VkResult<()> {
-        self.vulkan.wait_for_fence(self.vulkan.in_flight_fence(), u64::MAX, true)?;
-
-        let image_index = self.vulkan.acquire_next_image(
-            u64::MAX, self.vulkan.image_available_semaphore(), vk::Fence::null(),
-        )?;
-
-        self.vulkan.reset_command_buffer()?;
-        self.vulkan.record_command_buffer(image_index)?;
-
-        self.vulkan.submit_command_buffer()?;
-        self.vulkan.present_image(image_index)
+        self.vulkan_renderer.render_frame()
     }
 
     pub fn handle_event(&mut self, event: WindowEvent) {

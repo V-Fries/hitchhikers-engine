@@ -3,7 +3,7 @@ use ash::prelude::VkResult;
 use ash::vk;
 
 use crate::utils::{GetAllUniques, PipeLine, Result};
-use crate::vulkan::device::QueueFamilies;
+use crate::vulkan_renderer::device::QueueFamilies;
 use super::errors::PhysicalDeviceIsNotSuitable;
 
 // Sorted in order of preference

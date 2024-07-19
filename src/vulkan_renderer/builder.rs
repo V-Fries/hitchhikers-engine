@@ -1,18 +1,19 @@
 use ash::prelude::VkResult;
 use ash::vk;
-use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-use crate::vulkan::{device, Vulkan};
-use crate::vulkan::instance::create_instance;
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
+use crate::vulkan_renderer::{device, VulkanRenderer};
+use crate::vulkan_renderer::instance::create_instance;
 #[cfg(feature = "validation_layers")]
-use crate::vulkan::validation_layers::{check_validation_layers, setup_debug_messenger};
+use crate::vulkan_renderer::validation_layers::{check_validation_layers, setup_debug_messenger};
 use crate::utils::{PipeLine, Result};
-use crate::vulkan::device::{create_device, create_device_queue, pick_physical_device, QueueFamilies};
+use crate::vulkan_renderer::device::{create_device, create_device_queue, pick_physical_device, QueueFamilies};
 use super::graphics_pipeline::create_graphics_pipeline;
-use crate::vulkan::image_views::create_image_views;
-use crate::vulkan::swapchain::SwapchainBuilder;
+use crate::vulkan_renderer::image_views::create_image_views;
+use crate::vulkan_renderer::swapchain::SwapchainBuilder;
+use crate::vulkan_renderer::sync_objects::SyncObjects;
 
 #[derive(Default)]
-pub struct VulkanBuilder {
+pub struct VulkanRendererBuilder {
     entry: Option<ash::Entry>,
     instance: Option<ash::Instance>,
     #[cfg(feature = "validation_layers")]
@@ -39,31 +40,35 @@ pub struct VulkanBuilder {
     framebuffers: Option<Vec<vk::Framebuffer>>,
 
     command_pool: Option<vk::CommandPool>,
-    command_buffer: Option<vk::CommandBuffer>,
+    command_buffers: Option<Box<[vk::CommandBuffer]>>,
 
-    image_available_semaphore: Option<vk::Semaphore>,
-    render_finished_semaphore: Option<vk::Semaphore>,
-    in_flight_fence: Option<vk::Fence>,
+    image_available_semaphores: Option<Box<[vk::Semaphore]>>,
+    render_finished_semaphores: Option<Box<[vk::Semaphore]>>,
+    in_flight_fences: Option<Box<[vk::Fence]>>,
+
+    nb_of_frames_in_flight: u32,
 }
 
-impl VulkanBuilder {
-    pub fn new(display_handle: RawDisplayHandle,
-               window_handle: RawWindowHandle,
-               window_inner_size: winit::dpi::PhysicalSize<u32>)
+impl VulkanRendererBuilder {
+    pub fn new(window: &winit::window::Window,
+               nb_of_frames_in_flight: u32)
                -> Result<Self> {
+        let display_handle = window.display_handle()?.into();
+        let window_handle = window.window_handle()?.into();
+        let window_inner_size = window.inner_size();
+
         let mut builder = Self::default()
             .create_entry()?;
+        builder.nb_of_frames_in_flight = nb_of_frames_in_flight;
 
         #[cfg(feature = "validation_layers")] {
             check_validation_layers(builder.entry())?;
         }
 
         builder = builder.create_instance(display_handle)?;
-
         #[cfg(feature = "validation_layers")] {
             builder = builder.create_debug_messenger()?;
         }
-
         builder
             .create_surface(display_handle, window_handle)?
             .create_device(window_inner_size)?
@@ -74,7 +79,7 @@ impl VulkanBuilder {
             .create_graphics_pipeline()?
             .create_framebuffers()?
             .create_command_pool()?
-            .create_command_buffer()?
+            .create_command_buffers()?
             .create_sync_objects()?
             .pipe(Ok)
     }
@@ -259,44 +264,34 @@ impl VulkanBuilder {
         Ok(self)
     }
 
-    fn create_command_buffer(mut self) -> Result<Self> {
+    fn create_command_buffers(mut self)
+                              -> Result<Self> {
         let alloc_info = vk::CommandBufferAllocateInfo::default()
             .command_pool(self.command_pool())
             .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1);
+            .command_buffer_count(self.nb_of_frames_in_flight);
 
-        self.command_buffer = unsafe {
+        self.command_buffers = unsafe {
             self.device()
-                .allocate_command_buffers(&alloc_info)?[0]
+                .allocate_command_buffers(&alloc_info)?
+                .into_boxed_slice()
                 .pipe(Some)
         };
         Ok(self)
     }
 
-    fn create_sync_objects(mut self) -> Result<Self> {
-        let semaphore_create_info = vk::SemaphoreCreateInfo::default();
-        self.image_available_semaphore = unsafe {
-            self.device().create_semaphore(&semaphore_create_info, None)?
-                .pipe(Some)
-        };
-        self.render_finished_semaphore = unsafe {
-            self.device().create_semaphore(&semaphore_create_info, None)?
-                .pipe(Some)
-        };
-
-        let fence_create_info = vk::FenceCreateInfo::default()
-            .flags(vk::FenceCreateFlags::SIGNALED);
-        self.in_flight_fence = unsafe {
-            self.device().create_fence(&fence_create_info, None)?
-                .pipe(Some)
-        };
-
+    fn create_sync_objects(mut self)
+                           -> Result<Self> {
+        let sync_objects = SyncObjects::new(self.device(), self.nb_of_frames_in_flight)?;
+        self.image_available_semaphores = Some(sync_objects.image_available_semaphores);
+        self.render_finished_semaphores = Some(sync_objects.render_finished_semaphores);
+        self.in_flight_fences = Some(sync_objects.in_flight_fences);
         Ok(self)
     }
 
 
-    pub fn build(mut self) -> Vulkan {
-        Vulkan {
+    pub fn build(mut self) -> VulkanRenderer {
+        VulkanRenderer {
             entry: self.entry.take()
                 .expect("Vulkan entry was not initialised"),
             instance: self.instance.take()
@@ -338,15 +333,18 @@ impl VulkanBuilder {
 
             command_pool: self.command_pool.take()
                 .expect("Vulkan command_pool was not initialised"),
-            command_buffer: self.command_buffer.take()
+            command_buffers: self.command_buffers.take()
                 .expect("Vulkan command_buffer was not initialised"),
 
-            image_available_semaphore: self.image_available_semaphore.take()
+            image_available_semaphores: self.image_available_semaphores.take()
                 .expect("Vulkan image_available_semaphore was not initialised"),
-            render_finished_semaphore: self.render_finished_semaphore.take()
+            render_finished_semaphores: self.render_finished_semaphores.take()
                 .expect("Vulkan render_finished_semaphore was not initialised"),
-            in_flight_fence: self.in_flight_fence.take()
+            in_flight_fences: self.in_flight_fences.take()
                 .expect("Vulkan in_flight_fence was not initialised"),
+
+            current_frame: 0,
+            nb_of_frames_in_flight: self.nb_of_frames_in_flight as usize,
         }
     }
 
@@ -417,7 +415,7 @@ impl VulkanBuilder {
     }
 }
 
-impl Drop for VulkanBuilder {
+impl Drop for VulkanRendererBuilder {
     fn drop(&mut self) {
         self.destroy_sync_objects();
         self.destroy_command_pool();
@@ -436,27 +434,27 @@ impl Drop for VulkanBuilder {
     }
 }
 
-impl VulkanBuilder {
+impl VulkanRendererBuilder {
     fn destroy_sync_objects(&mut self) {
         if let Some(device) = &self.device {
-            Self::destroy_semaphore(self.image_available_semaphore.take(), device);
-            Self::destroy_semaphore(self.render_finished_semaphore.take(), device);
-            Self::destroy_fence(self.in_flight_fence.take(), device);
+            Self::destroy_semaphores(self.image_available_semaphores.take(), device);
+            Self::destroy_semaphores(self.render_finished_semaphores.take(), device);
+            Self::destroy_fences(self.in_flight_fences.take(), device);
         }
     }
 
-    fn destroy_semaphore(semaphore: Option<vk::Semaphore>, device: &ash::Device) {
-        if let Some(semaphore) = semaphore {
-            unsafe {
-                device.destroy_semaphore(semaphore, None);
+    fn destroy_semaphores(semaphores: Option<Box<[vk::Semaphore]>>, device: &ash::Device) {
+        if let Some(semaphores) = semaphores {
+            for semaphore in semaphores.into_iter() {
+                unsafe { device.destroy_semaphore(*semaphore, None); }
             }
         }
     }
 
-    fn destroy_fence(fence: Option<vk::Fence>, device: &ash::Device) {
-        if let Some(fence) = fence {
-            unsafe {
-                device.destroy_fence(fence, None);
+    fn destroy_fences(fences: Option<Box<[vk::Fence]>>, device: &ash::Device) {
+        if let Some(fences) = fences {
+            for fence in fences.into_iter() {
+                unsafe { device.destroy_fence(*fence, None); }
             }
         }
     }

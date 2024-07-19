@@ -1,7 +1,7 @@
 use ash::vk;
 use crate::utils::Result;
-use crate::vulkan::errors::FailedToCreatePipeline;
-use crate::vulkan::graphics_pipeline::pipeline_layout::create_pipeline_layout;
+use crate::vulkan_renderer::errors::FailedToCreatePipeline;
+use crate::vulkan_renderer::graphics_pipeline::pipeline_layout::create_pipeline_layout;
 use super::color_blending::ColorBlendStateCreateInfo;
 use super::dynamic_state::DynamicStateCreateInfo;
 use super::input_assembly::input_assembly_state_create_info;

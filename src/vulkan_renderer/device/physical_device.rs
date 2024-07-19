@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::ffi::CStr;
-use crate::vulkan::errors::{NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitable};
+use crate::vulkan_renderer::errors::{NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitable};
 
 use ash::vk;
 
 use crate::utils::{GetAllUniques, PipeLine, Result};
-use crate::vulkan::swapchain::SwapchainBuilder;
+use crate::vulkan_renderer::swapchain::SwapchainBuilder;
 use super::device::REQUIRED_EXTENSIONS;
 
 #[derive(Ord, Eq, PartialEq, PartialOrd)]

@@ -7,15 +7,15 @@ mod swapchain;
 mod builder;
 mod image_views;
 mod graphics_pipeline;
+mod sync_objects;
 
 use ash::prelude::VkResult;
 use ash::vk;
-use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use crate::utils::{PipeLine, Result};
-use crate::vulkan::builder::VulkanBuilder;
+use crate::vulkan_renderer::builder::VulkanRendererBuilder;
 
-pub struct Vulkan {
+pub struct VulkanRenderer {
     entry: ash::Entry,
     instance: ash::Instance,
     #[cfg(feature = "validation_layers")]
@@ -40,30 +40,47 @@ pub struct Vulkan {
     framebuffers: Vec<vk::Framebuffer>,
 
     command_pool: vk::CommandPool,
-    command_buffer: vk::CommandBuffer,
+    command_buffers: Box<[vk::CommandBuffer]>,
 
-    image_available_semaphore: vk::Semaphore,
-    render_finished_semaphore: vk::Semaphore,
-    in_flight_fence: vk::Fence,
+    image_available_semaphores: Box<[vk::Semaphore]>,
+    render_finished_semaphores: Box<[vk::Semaphore]>,
+    in_flight_fences: Box<[vk::Fence]>,
+
+    current_frame: usize,
+    nb_of_frames_in_flight: usize,
 }
 
-impl Vulkan {
-    pub fn new(window: &winit::window::Window)
+impl VulkanRenderer {
+    pub fn new(window: &winit::window::Window,
+               nb_of_frames_in_flight: u32)
                -> Result<Self> {
-        let display_handle = window.display_handle()?.into();
-        let window_handle = window.window_handle()?.into();
-
-        VulkanBuilder::new(display_handle, window_handle, window.inner_size())?
+        VulkanRendererBuilder::new(window, nb_of_frames_in_flight)?
             .build()
             .pipe(Ok)
     }
 
-    pub fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
+    pub fn render_frame(&mut self) -> VkResult<()> {
+        self.wait_for_in_flight_fence()?;
+
+        let image_index = self.acquire_next_image()?;
+
+        self.reset_command_buffer()?;
+        self.record_command_buffer(image_index)?;
+
+        self.submit_command_buffer()?;
+        self.present_image(image_index)?;
+
+        self.current_frame = (self.current_frame + 1) % self.nb_of_frames_in_flight;
+        Ok(())
+    }
+
+    fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
         // TODO refactor
         let begin_info = vk::CommandBufferBeginInfo::default();
+        let command_buffer = self.command_buffers[self.current_frame];
 
         unsafe {
-            self.device.begin_command_buffer(self.command_buffer, &begin_info)?;
+            self.device.begin_command_buffer(command_buffer, &begin_info)?;
         }
 
         let clear_values = [
@@ -83,11 +100,11 @@ impl Vulkan {
 
         unsafe {
             self.device.cmd_begin_render_pass(
-                self.command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE,
+                command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE,
             );
 
             self.device.cmd_bind_pipeline(
-                self.command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline,
+                command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline,
             );
         }
 
@@ -102,63 +119,47 @@ impl Vulkan {
             .offset(vk::Offset2D { x: 0, y: 0 })
             .extent(self.swapchain_extent)];
         unsafe {
-            self.device.cmd_set_viewport(self.command_buffer, 0, &viewports);
-            self.device.cmd_set_scissor(self.command_buffer, 0, &scissors);
-            self.device.cmd_draw(self.command_buffer, 3, 1, 0, 0);
-            self.device.cmd_end_render_pass(self.command_buffer);
-            self.device.end_command_buffer(self.command_buffer)?;
+            self.device.cmd_set_viewport(command_buffer, 0, &viewports);
+            self.device.cmd_set_scissor(command_buffer, 0, &scissors);
+            self.device.cmd_draw(command_buffer, 3, 1, 0, 0);
+            self.device.cmd_end_render_pass(command_buffer);
+            self.device.end_command_buffer(command_buffer)?;
         }
         Ok(())
     }
 
-    pub fn in_flight_fence(&self) -> vk::Fence {
-        self.in_flight_fence
-    }
-
-    pub fn wait_for_fence(&self,
-                          fence: vk::Fence,
-                          timeout: u64,
-                          should_reset: bool)
-                          -> VkResult<()> {
+    fn wait_for_in_flight_fence(&self) -> VkResult<()> {
+        let fences = [self.in_flight_fences[self.current_frame]];
         unsafe {
-            let fences = [fence];
-            self.device.wait_for_fences(&fences, true, timeout)?;
-            if should_reset {
-                self.device.reset_fences(&fences)?;
-            }
+            self.device.wait_for_fences(&fences, true, u64::MAX)?;
+            self.device.reset_fences(&fences)?;
         }
         Ok(())
     }
 
-    pub fn acquire_next_image(&self,
-                              timeout: u64,
-                              semaphore: vk::Semaphore,
-                              fence: vk::Fence)
-                              -> VkResult<u32> {
+    fn acquire_next_image(&self) -> VkResult<u32> {
         let index = unsafe {
             self.swapchain_device.acquire_next_image(
-                self.swapchain, timeout, semaphore, fence,
+                self.swapchain, u64::MAX,
+                self.image_available_semaphores[self.current_frame],
+                vk::Fence::null(),
             )?.0
         };
         Ok(index)
     }
 
-    pub fn image_available_semaphore(&self) -> vk::Semaphore {
-        self.image_available_semaphore
-    }
-
-    pub fn reset_command_buffer(&self) -> VkResult<()> {
+    fn reset_command_buffer(&self) -> VkResult<()> {
         unsafe {
-            self.device.reset_command_buffer(self.command_buffer,
+            self.device.reset_command_buffer(self.command_buffers[self.current_frame],
                                              vk::CommandBufferResetFlags::empty())
         }
     }
 
-    pub fn submit_command_buffer(&self) -> VkResult<()> {
-        let wait_semaphores = [self.image_available_semaphore];
+    fn submit_command_buffer(&self) -> VkResult<()> {
+        let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = [self.command_buffer];
-        let signal_semaphores = [self.render_finished_semaphore];
+        let command_buffers = [self.command_buffers[self.current_frame]];
+        let signal_semaphores = [self.render_finished_semaphores[self.current_frame]];
 
         let submit_info = vk::SubmitInfo::default()
             .wait_semaphores(&wait_semaphores)
@@ -168,13 +169,14 @@ impl Vulkan {
 
         unsafe {
             self.device.queue_submit(
-                self.queues.graphics_queue, &[submit_info], self.in_flight_fence,
+                self.queues.graphics_queue, &[submit_info],
+                self.in_flight_fences[self.current_frame],
             )
         }
     }
 
-    pub fn present_image(&self, image_index: u32) -> VkResult<()> {
-        let wait_semaphores = [self.render_finished_semaphore];
+    fn present_image(&self, image_index: u32) -> VkResult<()> {
+        let wait_semaphores = [self.render_finished_semaphores[self.current_frame]];
         let swapchains = [self.swapchain];
         let image_indices = [image_index];
 
@@ -191,7 +193,7 @@ impl Vulkan {
     }
 }
 
-impl Drop for Vulkan {
+impl Drop for VulkanRenderer {
     fn drop(&mut self) {
         unsafe {
             if let Err(err) = self.device.device_wait_idle() {
@@ -199,9 +201,15 @@ impl Drop for Vulkan {
                            Attempting to clean resources anyway...");
             }
 
-            self.device.destroy_semaphore(self.image_available_semaphore, None);
-            self.device.destroy_semaphore(self.render_finished_semaphore, None);
-            self.device.destroy_fence(self.in_flight_fence, None);
+            for semaphore in self.image_available_semaphores.iter() {
+                self.device.destroy_semaphore(*semaphore, None);
+            }
+            for semaphore in self.render_finished_semaphores.iter() {
+                self.device.destroy_semaphore(*semaphore, None);
+            }
+            for fence in self.in_flight_fences.iter() {
+                self.device.destroy_fence(*fence, None);
+            }
             self.device.destroy_command_pool(self.command_pool, None);
             for framebuffer in self.framebuffers.iter() {
                 self.device.destroy_framebuffer(*framebuffer, None);

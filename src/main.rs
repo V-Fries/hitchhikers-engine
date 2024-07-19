@@ -1,4 +1,4 @@
-mod vulkan;
+mod vulkan_renderer;
 mod app;
 mod utils;
 mod engine;

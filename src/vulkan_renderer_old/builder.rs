@@ -1,16 +1,16 @@
 use ash::prelude::VkResult;
 use ash::vk;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
-use crate::vulkan_renderer::{device, VulkanRenderer};
-use crate::vulkan_renderer::instance::create_instance;
+use crate::vulkan_renderer_old::{device, VulkanRenderer};
+use crate::vulkan_renderer_old::instance::create_instance;
 #[cfg(feature = "validation_layers")]
-use crate::vulkan_renderer::validation_layers::{check_validation_layers, setup_debug_messenger};
+use crate::vulkan_renderer_old::validation_layers::{check_validation_layers, setup_debug_messenger};
 use crate::utils::{PipeLine, Result};
-use crate::vulkan_renderer::device::{create_device, create_device_queue, pick_physical_device, QueueFamilies};
+use crate::vulkan_renderer_old::device::{create_device, create_device_queue, pick_physical_device, QueueFamilies};
 use super::graphics_pipeline::create_graphics_pipeline;
-use crate::vulkan_renderer::image_views::create_image_views;
-use crate::vulkan_renderer::swapchain::SwapchainBuilder;
-use crate::vulkan_renderer::sync_objects::SyncObjects;
+use crate::vulkan_renderer_old::image_views::create_image_views;
+use crate::vulkan_renderer_old::swapchain::SwapchainBuilder;
+use crate::vulkan_renderer_old::sync_objects::SyncObjects;
 
 #[derive(Default)]
 pub struct VulkanRendererBuilder {

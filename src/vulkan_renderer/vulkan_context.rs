@@ -5,10 +5,11 @@ mod queue_families;
 use ash::vk;
 use crate::utils::{PipeLine, Result};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use builder::ContextBuilder;
-use queue_families::QueueFamilies;
+use builder::VulkanContextBuilder;
+use crate::vulkan_renderer::vulkan_context::builder::SwapchainBuilder;
+use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
 
-pub struct Context {
+pub struct VulkanContext {
     entry: ash::Entry,
     instance: ash::Instance,
 
@@ -17,21 +18,23 @@ pub struct Context {
 
     surface: vk::SurfaceKHR,
 
+    physical_device: vk::PhysicalDevice,
     device: ash::Device,
-    device_queue_families: QueueFamilies,
 }
 
-impl Context {
-    pub fn new(window: &winit::window::Window) -> Result<Self> {
+impl VulkanContext {
+    pub fn new(window: &winit::window::Window)
+               -> Result<(Self, QueueFamilies, SwapchainBuilder)> {
         let display_handle = window.display_handle()?.into();
         let window_handle = window.window_handle()?.into();
+        let window_inner_size = window.inner_size();
 
         unsafe {
-            ContextBuilder::default()
+            VulkanContextBuilder::default()
                 .create_entry()?
                 .create_instance(display_handle)?
                 .create_surface(display_handle, window_handle)?
-                .create_device()?
+                .create_device(window_inner_size)?
                 .build()
                 .pipe(Ok)
         }
@@ -49,7 +52,7 @@ impl Context {
     // }
 }
 
-impl Drop for Context {
+impl Drop for VulkanContext {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_device(None);

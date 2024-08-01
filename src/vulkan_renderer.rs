@@ -1,23 +1,23 @@
-mod context;
+mod vulkan_context;
 
 use crate::utils::Result;
 use ash::vk;
-use context::Context;
+use vulkan_context::VulkanContext;
 
 pub struct VulkanRenderer {
-    context: Context,
+    context: VulkanContext,
     // render_targets: RenderTargets,
     // interface: Interface,
-    // sync: Sync,
-    //
+
     // current_frame: usize,
     // nb_of_frames_in_flight: usize,
 }
 
 impl VulkanRenderer {
     pub fn new(window: &winit::window::Window, _nb_of_frames_in_flight: u32) -> Result<Self> {
+        // TODO use a builder
         Ok(Self {
-            context: Context::new(window)?
+            context: VulkanContext::new(window)?.0
         })
     }
 }
@@ -42,6 +42,8 @@ pub struct Interface {
     render_pass: vk::RenderPass,
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
+
+    sync: Sync,
 }
 
 pub struct Queues {

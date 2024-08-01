@@ -1,43 +1,47 @@
 use std::collections::HashSet;
 use std::ffi::CStr;
-use crate::vulkan_renderer::context::errors::{
+use crate::vulkan_renderer::vulkan_context::errors::{
     NoSuitablePhysicalDevice, PhysicalDeviceIsNotSuitable,
 };
 
 use ash::vk;
 
 use crate::utils::Result;
-use crate::vulkan_renderer::context::queue_families::{QueueFamilies, QueueFamiliesBuilder};
+use crate::vulkan_renderer::vulkan_context::builder::device::swapchain_builder::SwapchainBuilder;
+use crate::vulkan_renderer::vulkan_context::queue_families::{QueueFamilies, QueueFamiliesBuilder};
 use super::super::device::REQUIRED_EXTENSIONS;
 
 
-pub struct PhysicalDevice {
+type ExtensionName = String;
+
+pub struct PhysicalDeviceData {
     pub physical_device: vk::PhysicalDevice,
     pub queue_families: QueueFamilies,
+    pub swapchain_builder: SwapchainBuilder,
 }
-
-type ExtensionName = String;
 
 #[derive(Ord, Eq, PartialEq, PartialOrd)]
 struct DeviceScore(u32);
 
-struct DeviceData {
-    physical_device: vk::PhysicalDevice,
-    queue_families: QueueFamilies,
+struct ScoredPhysicalDeviceData {
+    physical_device_data: PhysicalDeviceData,
     score: DeviceScore,
 }
 
-impl PhysicalDevice {
+impl PhysicalDeviceData {
     pub fn new(entry: &ash::Entry,
                instance: &ash::Instance,
-               surface: vk::SurfaceKHR)
-               -> Result<PhysicalDevice> {
+               surface: vk::SurfaceKHR,
+               window_inner_size: winit::dpi::PhysicalSize<u32>)
+               -> Result<PhysicalDeviceData> {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe { instance.enumerate_physical_devices()? }
             .into_iter()
             .filter_map(|device| {
-                match DeviceData::new(instance, &surface_instance, surface, device) {
+                match ScoredPhysicalDeviceData::new(
+                    instance, &surface_instance, surface, window_inner_size, device,
+                ) {
                     Ok(scored_device) => Some(scored_device),
                     Err(err) => {
                         println!("Failed to score device {device:?}: {err}");
@@ -46,20 +50,18 @@ impl PhysicalDevice {
                 }
             })
             .max_by(|left, right| { left.score.cmp(&right.score) })
-            .map(|device_data| Self {
-                physical_device: device_data.physical_device,
-                queue_families: device_data.queue_families,
-            })
+            .map(|scored_device_data| scored_device_data.physical_device_data)
             .ok_or(NoSuitablePhysicalDevice::new().into())
     }
 }
 
-impl DeviceData {
+impl ScoredPhysicalDeviceData {
     fn new(instance: &ash::Instance,
            surface_instance: &ash::khr::surface::Instance,
            surface: vk::SurfaceKHR,
+           window_inner_size: winit::dpi::PhysicalSize<u32>,
            device: vk::PhysicalDevice)
-           -> Result<DeviceData> {
+           -> Result<ScoredPhysicalDeviceData> {
         let device_properties = unsafe { instance.get_physical_device_properties(device) };
         let device_features = unsafe { instance.get_physical_device_features(device) };
         let queue_families = Self::find_queue_families(
@@ -68,11 +70,18 @@ impl DeviceData {
 
         Self::check_device_suitability(instance, device)?;
 
+        let swapchain_builder = SwapchainBuilder::new(
+            device, queue_families, surface_instance, surface, window_inner_size,
+        )?;
+
         let score = Self::score_device(device_properties, device_features);
 
-        Ok(DeviceData {
-            physical_device: device,
-            queue_families,
+        Ok(ScoredPhysicalDeviceData {
+            physical_device_data: PhysicalDeviceData {
+                physical_device: device,
+                queue_families,
+                swapchain_builder,
+            },
             score,
         })
     }

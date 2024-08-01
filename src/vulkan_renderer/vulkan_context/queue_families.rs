@@ -1,6 +1,6 @@
 use ash::vk;
 use crate::utils::{GetAllUniques, PipeLine};
-use crate::vulkan_renderer::context::errors::PhysicalDeviceIsNotSuitable;
+use crate::vulkan_renderer::vulkan_context::errors::PhysicalDeviceIsNotSuitable;
 
 #[derive(Clone, Copy)]
 pub struct QueueFamilies {

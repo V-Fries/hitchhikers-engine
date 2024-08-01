@@ -1,10 +1,12 @@
 mod physical_device;
+mod swapchain_builder;
 
 use std::ffi::{c_char};
 use ash::vk;
 
-pub use physical_device::PhysicalDevice;
-pub use crate::vulkan_renderer::context::queue_families::QueueFamilies;
+pub use physical_device::PhysicalDeviceData;
+pub use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
+pub use swapchain_builder::SwapchainBuilder;
 use crate::utils::{PipeLine, Result};
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
@@ -13,7 +15,7 @@ pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
 ];
 
 pub fn create_device(instance: &ash::Instance,
-                     device_data: &PhysicalDevice)
+                     device_data: &PhysicalDeviceData)
                      -> Result<ash::Device> {
     let queue_priority = [1.];
     let queue_create_infos: Vec<_> = device_data.queue_families

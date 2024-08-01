@@ -3,17 +3,21 @@ mod validation_layers;
 mod instance;
 mod device;
 
+pub use device::SwapchainBuilder;
+
 use crate::utils::{PipeLine, Result};
 #[cfg(feature = "validation_layers")]
 use validation_layers::{check_validation_layers, create_debug_messenger};
-use device::{create_device, QueueFamilies, PhysicalDevice};
+use device::create_device;
 use instance::create_instance;
 use ash::vk;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
-use super::Context;
+use crate::vulkan_renderer::vulkan_context::builder::device::PhysicalDeviceData;
+use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
+use super::VulkanContext;
 
 #[derive(Default)]
-pub struct ContextBuilder {
+pub struct VulkanContextBuilder {
     entry: Option<ash::Entry>,
     instance: Option<ash::Instance>,
 
@@ -22,21 +26,27 @@ pub struct ContextBuilder {
 
     surface: Option<vk::SurfaceKHR>,
 
+    physical_device_data: Option<PhysicalDeviceData>,
     device: Option<ash::Device>,
-    device_queue_families: Option<QueueFamilies>,
 }
 
-impl ContextBuilder {
-    pub unsafe fn build(mut self) -> Context {
-        Context {
-            entry: self.entry.take().unwrap(),
-            instance: self.instance.take().unwrap(),
-            #[cfg(feature = "validation_layers")]
-            debug_messenger: self.debug_messenger.take().unwrap(),
-            surface: self.surface.take().unwrap(),
-            device: self.device.take().unwrap(),
-            device_queue_families: self.device_queue_families.take().unwrap(),
-        }
+impl VulkanContextBuilder {
+    pub unsafe fn build(mut self) -> (VulkanContext, QueueFamilies, SwapchainBuilder) {
+        let physical_device_data = self.physical_device_data.take().unwrap();
+
+        (
+            VulkanContext {
+                entry: self.entry.take().unwrap(),
+                instance: self.instance.take().unwrap(),
+                #[cfg(feature = "validation_layers")]
+                debug_messenger: self.debug_messenger.take().unwrap(),
+                surface: self.surface.take().unwrap(),
+                device: self.device.take().unwrap(),
+                physical_device: physical_device_data.physical_device,
+            },
+            physical_device_data.queue_families,
+            physical_device_data.swapchain_builder,
+        )
     }
 
 
@@ -81,16 +91,16 @@ impl ContextBuilder {
         Ok(self)
     }
 
-    pub unsafe fn create_device(mut self)
+    pub unsafe fn create_device(mut self,
+                                window_inner_size: winit::dpi::PhysicalSize<u32>)
                                 -> Result<Self> {
-        let physical_device = PhysicalDevice::new(
-            self.entry(), self.instance(), self.surface(),
-        )?;
-
-        self.device = create_device(self.instance(), &physical_device)?
+        self.physical_device_data = PhysicalDeviceData::new(
+            self.entry(), self.instance(), self.surface(), window_inner_size,
+        )?
             .pipe(Some);
 
-        self.device_queue_families = Some(physical_device.queue_families);
+        self.device = create_device(self.instance(), &self.physical_device())?
+            .pipe(Some);
 
         Ok(self)
     }
@@ -107,9 +117,13 @@ impl ContextBuilder {
     unsafe fn surface(&self) -> vk::SurfaceKHR {
         self.surface.unwrap()
     }
+
+    unsafe fn physical_device(&self) -> &PhysicalDeviceData {
+        self.physical_device_data.as_ref().unwrap()
+    }
 }
 
-impl Drop for ContextBuilder {
+impl Drop for VulkanContextBuilder {
     fn drop(&mut self) {
         self.destroy_device();
         #[cfg(feature = "validation_layers")] {
@@ -120,7 +134,7 @@ impl Drop for ContextBuilder {
     }
 }
 
-impl ContextBuilder {
+impl VulkanContextBuilder {
     fn destroy_device(&mut self) {
         if let Some(device) = &self.device.take() {
             unsafe { device.destroy_device(None) };

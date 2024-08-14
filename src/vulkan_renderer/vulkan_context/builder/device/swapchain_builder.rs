@@ -52,8 +52,8 @@ impl SwapchainBuilder {
             extent: Self::choose_extent(capabilities, window_inner_size),
             image_count: Self::choose_image_count(capabilities)?,
             queues_working_on_images: [
-                queue_family.present_index(),
-                queue_family.graphics_index()
+                queue_family.present_index,
+                queue_family.graphics_index
             ],
         })
     }

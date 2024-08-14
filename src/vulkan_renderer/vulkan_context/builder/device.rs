@@ -1,11 +1,10 @@
 mod physical_device;
 mod swapchain_builder;
 
-use std::ffi::{c_char};
+use std::ffi::c_char;
 use ash::vk;
 
 pub use physical_device::PhysicalDeviceData;
-pub use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
 pub use swapchain_builder::SwapchainBuilder;
 use crate::utils::{PipeLine, Result};
 

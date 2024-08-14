@@ -4,13 +4,13 @@ pub trait TakeVec: Sized {
 
 impl<T> TakeVec for Vec<T>
 where
-    T: Copy,
+    T: Clone,
 {
     fn take(&mut self) -> Self {
         // TODO might be able to optimize this with unsafe functions?
         let mut result = Vec::with_capacity(self.len());
         for elem in self.iter().rev() {
-            result.push(*elem);
+            result.push(elem.clone());
         }
 
         self.clear();

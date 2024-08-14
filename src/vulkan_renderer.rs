@@ -1,58 +1,47 @@
 mod vulkan_context;
+mod vulkan_interface;
+mod render_targets;
 
 use crate::utils::Result;
 use ash::vk;
+use render_targets::RenderTargets;
 use vulkan_context::VulkanContext;
+use vulkan_interface::VulkanInterface;
+
+const NB_OF_FRAMES_IN_FLIGHT: u32 = 2;
+const NB_OF_FRAMES_IN_FLIGHT_USIZE: usize = NB_OF_FRAMES_IN_FLIGHT as usize;
 
 pub struct VulkanRenderer {
     context: VulkanContext,
-    // render_targets: RenderTargets,
-    // interface: Interface,
+    interface: VulkanInterface,
+    render_targets: RenderTargets,
 
-    // current_frame: usize,
-    // nb_of_frames_in_flight: usize,
+    current_frame: usize,
 }
 
 impl VulkanRenderer {
-    pub fn new(window: &winit::window::Window, _nb_of_frames_in_flight: u32) -> Result<Self> {
-        // TODO use a builder
-        Ok(Self {
-            context: VulkanContext::new(window)?.0
-        })
+    pub fn new(window: &winit::window::Window) -> Result<Self> {
+        // TODO use a builder to handle leaks on error
+        // TODO use generics instead of option in the builders
+        let (context, queue_families, swapchain_builder) = VulkanContext::new(window)?;
+        unsafe {
+            Ok(Self {
+                interface: VulkanInterface::new(&context, queue_families)?,
+                render_targets: RenderTargets::new(&context, swapchain_builder)?,
+                context,
+                current_frame: 0,
+            })
+        }
     }
 }
 
-pub struct RenderTargets {
-    swapchain_device: ash::khr::swapchain::Device,
-    swapchain: vk::SwapchainKHR,
-    swapchain_images: Vec<vk::Image>,
-    swapchain_format: vk::Format,
-    swapchain_extent: vk::Extent2D,
-    swapchain_image_views: Vec<vk::ImageView>,
-
-    framebuffers: Vec<vk::Framebuffer>,
+impl Drop for VulkanRenderer {
+    fn drop(&mut self) {
+        unsafe {
+            self.interface.destroy(&self.context);
+            self.render_targets.destroy(&self.context);
+            self.context.destroy();
+        }
+    }
 }
 
-pub struct Interface {
-    queues: Queues,
-
-    command_pool: vk::CommandPool,
-    command_buffers: Box<[vk::CommandBuffer]>,
-
-    render_pass: vk::RenderPass,
-    pipeline_layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
-
-    sync: Sync,
-}
-
-pub struct Queues {
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
-}
-
-pub struct Sync {
-    image_available_semaphores: Box<[vk::Semaphore]>,
-    render_finished_semaphores: Box<[vk::Semaphore]>,
-    in_flight_fences: Box<[vk::Fence]>,
-}

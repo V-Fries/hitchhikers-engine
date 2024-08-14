@@ -4,8 +4,8 @@ use crate::vulkan_renderer::vulkan_context::errors::PhysicalDeviceIsNotSuitable;
 
 #[derive(Clone, Copy)]
 pub struct QueueFamilies {
-    graphics_index: u32,
-    present_index: u32,
+    pub graphics_index: u32,
+    pub present_index: u32,
 }
 
 #[derive(Default)]
@@ -15,14 +15,6 @@ pub struct QueueFamiliesBuilder {
 }
 
 impl QueueFamilies {
-    pub fn graphics_index(&self) -> u32 {
-        self.graphics_index
-    }
-
-    pub fn present_index(&self) -> u32 {
-        self.present_index
-    }
-
     pub fn as_vec_of_unique_indexes(&self) -> Vec<u32> {
         [self.graphics_index, self.present_index].into_iter().get_all_uniques()
     }

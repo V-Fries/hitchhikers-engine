@@ -6,8 +6,8 @@ use ash::vk;
 use crate::utils::{PipeLine, Result};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use builder::VulkanContextBuilder;
-use crate::vulkan_renderer::vulkan_context::builder::SwapchainBuilder;
-use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
+pub use queue_families::QueueFamilies;
+pub use builder::SwapchainBuilder;
 
 pub struct VulkanContext {
     entry: ash::Entry,
@@ -40,29 +40,30 @@ impl VulkanContext {
         }
     }
 
-    // pub fn get_device_queues(&self) -> Queues {
-    //     Queues {
-    //         graphics_queue: unsafe {
-    //             self.device.get_device_queue(self.device_queue_families.graphics_index(), 0)
-    //         },
-    //         present_queue: unsafe {
-    //             self.device.get_device_queue(self.device_queue_families.present_index(), 0)
-    //         },
-    //     }
-    // }
-}
+    pub fn device(&self) -> &ash::Device {
+        &self.device
+    }
 
-impl Drop for VulkanContext {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_device(None);
-            #[cfg(feature = "validation_layers")] {
-                ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)
-                    .destroy_debug_utils_messenger(self.debug_messenger, None);
-            }
-            ash::khr::surface::Instance::new(&self.entry, &self.instance)
-                .destroy_surface(self.surface, None);
-            self.instance.destroy_instance(None);
+    pub fn instance(&self) -> &ash::Instance {
+        &self.instance
+    }
+
+    pub fn surface(&self) -> vk::SurfaceKHR {
+        self.surface
+    }
+
+    pub unsafe fn destroy_device(&mut self) {
+        self.device.destroy_device(None);
+    }
+
+    pub unsafe fn destroy(&mut self) {
+        self.destroy_device();
+        #[cfg(feature = "validation_layers")] {
+            ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)
+                .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
+        ash::khr::surface::Instance::new(&self.entry, &self.instance)
+            .destroy_surface(self.surface, None);
+        self.instance.destroy_instance(None);
     }
 }

@@ -11,7 +11,7 @@ use validation_layers::{check_validation_layers, create_debug_messenger};
 use device::create_device;
 use instance::create_instance;
 use ash::vk;
-use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
+use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use crate::vulkan_renderer::vulkan_context::builder::device::PhysicalDeviceData;
 use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
 use super::VulkanContext;
@@ -99,7 +99,7 @@ impl VulkanContextBuilder {
         )?
             .pipe(Some);
 
-        self.device = create_device(self.instance(), &self.physical_device())?
+        self.device = create_device(self.instance(), self.physical_device())?
             .pipe(Some);
 
         Ok(self)

@@ -1,7 +1,7 @@
 mod builder;
 
-use ash::{prelude::VkResult, vk};
-use crate::{utils::{PipeLine, Result}, vulkan_renderer::vulkan_context::VulkanContext};
+use ash::vk;
+use crate::utils::{PipeLine, Result};
 use builder::SyncObjectsBuilder;
 use crate::vulkan_renderer::NB_OF_FRAMES_IN_FLIGHT_USIZE;
 

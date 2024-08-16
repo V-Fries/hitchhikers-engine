@@ -2,9 +2,9 @@ mod builder;
 mod errors;
 
 use crate::utils::{Result, PipeLine};
-use ash::{prelude::VkResult, vk};
+use ash::vk;
 
-use super::{vulkan_context::{SwapchainBuilder, VulkanContext}, vulkan_interface::SyncObjects};
+use super::vulkan_context::{SwapchainBuilder, VulkanContext};
 use builder::RenderTargetsBuilder;
 
 pub struct RenderTargets {

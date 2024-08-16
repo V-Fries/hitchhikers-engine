@@ -3,9 +3,9 @@ mod queue;
 mod sync_objects;
 
 use crate::utils::{PipeLine, Result};
-use ash::{prelude::VkResult, vk};
+use ash::vk;
 use builder::VulkanInterfaceBuilder;
-use super::{render_targets::{self, RenderTargets}, vulkan_context::{QueueFamilies, VulkanContext}};
+use super::vulkan_context::{QueueFamilies, VulkanContext};
 use queue::Queues;
 pub use sync_objects::SyncObjects;
 use crate::vulkan_renderer::NB_OF_FRAMES_IN_FLIGHT_USIZE;

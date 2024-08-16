@@ -1,9 +1,11 @@
+mod builder;
 mod vulkan_context;
 mod vulkan_interface;
 mod render_targets;
 
-use crate::utils::Result;
+use crate::utils::{Result, PipeLine};
 use ash::{prelude::VkResult, vk};
+use builder::VulkanRendererBuilder;
 use render_targets::RenderTargets;
 use vulkan_context::VulkanContext;
 use vulkan_interface::VulkanInterface;
@@ -21,16 +23,13 @@ pub struct VulkanRenderer {
 
 impl VulkanRenderer {
     pub fn new(window: &winit::window::Window) -> Result<Self> {
-        // TODO use a builder to handle leaks on error
-        // TODO use generics instead of option in the builders
-        let (context, queue_families, swapchain_builder) = VulkanContext::new(window)?;
         unsafe {
-            Ok(Self {
-                interface: VulkanInterface::new(&context, queue_families)?,
-                render_targets: RenderTargets::new(&context, swapchain_builder)?,
-                context,
-                current_frame: 0,
-            })
+            VulkanRendererBuilder::default()
+                .create_context(window)?
+                .create_interface()?
+                .create_render_targets()?
+                .build()
+                .pipe(Ok)
         }
     }
 

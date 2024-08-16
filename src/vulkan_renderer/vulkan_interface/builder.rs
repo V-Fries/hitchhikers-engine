@@ -4,7 +4,6 @@ use crate::vulkan_renderer::{NB_OF_FRAMES_IN_FLIGHT, NB_OF_FRAMES_IN_FLIGHT_USIZ
 use crate::vulkan_renderer::vulkan_interface::{Queues, SyncObjects, VulkanInterface};
 use crate::vulkan_renderer::vulkan_context::{QueueFamilies, VulkanContext};
 
-// TODO implement drop
 pub struct VulkanInterfaceBuilder<'a> {
     context: &'a VulkanContext,
 

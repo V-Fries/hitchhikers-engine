@@ -3,11 +3,11 @@ mod queue;
 mod sync_objects;
 
 use crate::utils::{PipeLine, Result};
-use ash::vk;
+use ash::{prelude::VkResult, vk};
 use builder::VulkanInterfaceBuilder;
-use super::vulkan_context::{QueueFamilies, VulkanContext};
+use super::{render_targets::{self, RenderTargets}, vulkan_context::{QueueFamilies, VulkanContext}};
 use queue::Queues;
-use sync_objects::SyncObjects;
+pub use sync_objects::SyncObjects;
 use crate::vulkan_renderer::NB_OF_FRAMES_IN_FLIGHT_USIZE;
 
 pub struct VulkanInterface {
@@ -29,6 +29,18 @@ impl VulkanInterface {
             .create_sync_objects()?
             .build()
             .pipe(Ok)
+    }
+
+    pub fn queues(&self) -> &Queues {
+        &self.queues
+    }
+
+    pub fn command_buffers(&self) -> &[vk::CommandBuffer; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
+        &self.command_buffers
+    }
+
+    pub fn sync_objects(&self) -> &SyncObjects {
+        &self.sync_objects
     }
 
     pub unsafe fn destroy(&mut self, context: &VulkanContext) {

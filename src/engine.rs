@@ -37,9 +37,7 @@ impl Engine {
     }
 
     pub fn render_frame(&mut self) -> VkResult<()> {
-        // TODO uncomment
-        // self.vulkan_renderer.render_frame()
-        Ok(())
+        self.vulkan_renderer.render_frame()
     }
 
     pub fn handle_event(&mut self, event: WindowEvent) {

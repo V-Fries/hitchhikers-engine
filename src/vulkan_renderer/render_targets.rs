@@ -2,9 +2,9 @@ mod builder;
 mod errors;
 
 use crate::utils::{Result, PipeLine};
-use ash::vk;
+use ash::{prelude::VkResult, vk};
 
-use super::vulkan_context::{SwapchainBuilder, VulkanContext};
+use super::{vulkan_context::{SwapchainBuilder, VulkanContext}, vulkan_interface::SyncObjects};
 use builder::RenderTargetsBuilder;
 
 pub struct RenderTargets {
@@ -34,6 +34,30 @@ impl RenderTargets {
             .create_framebuffers()?
             .build()
             .pipe(Ok)
+    }
+
+    pub fn render_pass(&self) -> vk::RenderPass {
+        self.render_pass
+    }
+
+    pub fn framebuffers(&self) -> &[vk::Framebuffer] {
+        &self.framebuffers
+    }
+
+    pub fn swapchain_extent(&self) -> vk::Extent2D {
+        self.swapchain_extent
+    }
+
+    pub fn pipeline(&self) -> vk::Pipeline {
+        self.pipeline
+    }
+
+    pub fn swapchain_device(&self) -> &ash::khr::swapchain::Device {
+        &self.swapchain_device
+    }
+
+    pub fn swapchain(&self) -> vk::SwapchainKHR {
+        self.swapchain
     }
 
     pub unsafe fn destroy(&self, context: &VulkanContext) {

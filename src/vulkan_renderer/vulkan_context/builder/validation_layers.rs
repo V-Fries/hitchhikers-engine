@@ -1,14 +1,12 @@
-use super::errors::ValidationLayerNotFound;
-
 use ash::vk;
 use crate::utils::Result;
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
+use super::super::errors::ValidationLayerNotFound;
 
 type LayerName = String;
 
-#[cfg(feature = "validation_layers")]
 pub const VALIDATION_LAYERS: &[*const c_char] = &[
     c"VK_LAYER_KHRONOS_validation".as_ptr(),
 ];
@@ -37,8 +35,9 @@ fn get_set_of_available_validation_layers(entry: &ash::Entry)
         .collect()
 }
 
-pub fn setup_debug_messenger(entry: &ash::Entry, instance: &ash::Instance)
-                             -> Result<vk::DebugUtilsMessengerEXT> {
+pub fn create_debug_messenger(entry: &ash::Entry,
+                              instance: &ash::Instance)
+                              -> Result<vk::DebugUtilsMessengerEXT> {
     let create_info = get_debug_utils_messenger_create_info();
     let debug_utils = ash::ext::debug_utils::Instance::new(entry, instance);
     unsafe {

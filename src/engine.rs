@@ -30,7 +30,7 @@ impl Engine {
             .map_err(FailedToCreateWindow::new)?;
 
         Ok(Self {
-            vulkan_renderer: VulkanRenderer::new(&window, 2)
+            vulkan_renderer: VulkanRenderer::new(&window)
                 .map_err(FailedToInitVulkan::new)?,
             window,
         })

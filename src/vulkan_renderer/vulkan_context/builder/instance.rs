@@ -1,10 +1,10 @@
-use super::errors::ExtensionNotFound;
+use super::super::errors::ExtensionNotFound;
 #[cfg(feature = "validation_layers")]
 use super::validation_layers::VALIDATION_LAYERS;
 use crate::engine::{ENGINE_NAME_CSTR, ENGINE_VERSION};
 
 use ash::vk;
-use crate::utils::Result;
+use crate::utils::{PipeLine, Result};
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
@@ -24,7 +24,8 @@ pub fn create_instance(entry: &ash::Entry,
     let required_extensions = get_required_extensions(entry, display_handle)?;
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
-    unsafe { Ok(entry.create_instance(&create_info, None)?) }
+    unsafe { entry.create_instance(&create_info, None)? }
+        .pipe(Ok)
 }
 
 fn get_required_extensions(entry: &ash::Entry,

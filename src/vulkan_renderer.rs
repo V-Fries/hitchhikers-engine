@@ -1,62 +1,36 @@
-mod errors;
-#[cfg(feature = "validation_layers")]
-mod validation_layers;
-mod instance;
-mod device;
-mod swapchain;
 mod builder;
-mod image_views;
-mod graphics_pipeline;
-mod sync_objects;
+mod vulkan_context;
+mod vulkan_interface;
+mod render_targets;
 
-use ash::prelude::VkResult;
-use ash::vk;
+use crate::utils::{Result, PipeLine};
+use ash::{prelude::VkResult, vk};
+use builder::VulkanRendererBuilder;
+use render_targets::RenderTargets;
+use vulkan_context::VulkanContext;
+use vulkan_interface::VulkanInterface;
 
-use crate::utils::{PipeLine, Result};
-use crate::vulkan_renderer::builder::VulkanRendererBuilder;
+const NB_OF_FRAMES_IN_FLIGHT: u32 = 2;
+const NB_OF_FRAMES_IN_FLIGHT_USIZE: usize = NB_OF_FRAMES_IN_FLIGHT as usize;
 
 pub struct VulkanRenderer {
-    entry: ash::Entry,
-    instance: ash::Instance,
-    #[cfg(feature = "validation_layers")]
-    debug_messenger: vk::DebugUtilsMessengerEXT,
-
-    device: ash::Device,
-    queues: device::Queues,
-
-    surface: vk::SurfaceKHR,
-
-    swapchain_device: ash::khr::swapchain::Device,
-    swapchain: vk::SwapchainKHR,
-    swapchain_images: Vec<vk::Image>,
-    swapchain_format: vk::Format,
-    swapchain_extent: vk::Extent2D,
-    swapchain_image_views: Vec<vk::ImageView>,
-
-    render_pass: vk::RenderPass,
-    pipeline_layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
-
-    framebuffers: Vec<vk::Framebuffer>,
-
-    command_pool: vk::CommandPool,
-    command_buffers: Box<[vk::CommandBuffer]>,
-
-    image_available_semaphores: Box<[vk::Semaphore]>,
-    render_finished_semaphores: Box<[vk::Semaphore]>,
-    in_flight_fences: Box<[vk::Fence]>,
+    context: VulkanContext,
+    interface: VulkanInterface,
+    render_targets: RenderTargets,
 
     current_frame: usize,
-    nb_of_frames_in_flight: usize,
 }
 
 impl VulkanRenderer {
-    pub fn new(window: &winit::window::Window,
-               nb_of_frames_in_flight: u32)
-               -> Result<Self> {
-        VulkanRendererBuilder::new(window, nb_of_frames_in_flight)?
-            .build()
-            .pipe(Ok)
+    pub fn new(window: &winit::window::Window) -> Result<Self> {
+        unsafe {
+            VulkanRendererBuilder::default()
+                .create_context(window)?
+                .create_interface()?
+                .create_render_targets()?
+                .build()
+                .pipe(Ok)
+        }
     }
 
     pub fn render_frame(&mut self) -> VkResult<()> {
@@ -70,17 +44,45 @@ impl VulkanRenderer {
         self.submit_command_buffer()?;
         self.present_image(image_index)?;
 
-        self.current_frame = (self.current_frame + 1) % self.nb_of_frames_in_flight;
+        self.current_frame = (self.current_frame + 1) % NB_OF_FRAMES_IN_FLIGHT_USIZE;
+        Ok(())
+    } 
+
+    pub fn wait_for_in_flight_fence(&self) -> VkResult<()> {
+        let fences = [self.interface.sync_objects().in_flight_fences[self.current_frame]];
+        unsafe {
+            self.context.device().wait_for_fences(&fences, true, u64::MAX)?;
+            self.context.device().reset_fences(&fences)?;
+        }
         Ok(())
     }
 
-    fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
+    pub fn acquire_next_image(&self) -> VkResult<u32> {
+        let index = unsafe {
+            self.render_targets.swapchain_device().acquire_next_image(
+                self.render_targets.swapchain(),
+                u64::MAX,
+                self.interface.sync_objects().image_available_semaphores[self.current_frame],
+                vk::Fence::null(),
+            )?.0
+        };
+        Ok(index)
+    }
+
+    pub fn reset_command_buffer(&self) -> VkResult<()> {
+        unsafe {
+            self.context.device().reset_command_buffer(self.interface.command_buffers()[self.current_frame],
+                                                  vk::CommandBufferResetFlags::empty())
+        }
+    }
+
+    pub fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
         // TODO refactor
         let begin_info = vk::CommandBufferBeginInfo::default();
-        let command_buffer = self.command_buffers[self.current_frame];
+        let command_buffer = self.interface.command_buffers()[self.current_frame];
 
         unsafe {
-            self.device.begin_command_buffer(command_buffer, &begin_info)?;
+            self.context.device().begin_command_buffer(command_buffer, &begin_info)?;
         }
 
         let clear_values = [
@@ -90,76 +92,51 @@ impl VulkanRenderer {
             }
         ];
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
-            .render_pass(self.render_pass)
-            .framebuffer(self.framebuffers[image_index as usize])
+            .render_pass(self.render_targets.render_pass())
+            .framebuffer(self.render_targets.framebuffers()[image_index as usize])
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
-                extent: self.swapchain_extent,
+                extent: self.render_targets.swapchain_extent(),
             })
             .clear_values(&clear_values);
 
         unsafe {
-            self.device.cmd_begin_render_pass(
+            self.context.device().cmd_begin_render_pass(
                 command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE,
             );
 
-            self.device.cmd_bind_pipeline(
-                command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline,
+            self.context.device().cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.render_targets.pipeline(),
             );
         }
 
         let viewports = [vk::Viewport::default()
             .x(0.)
             .y(0.)
-            .width(self.swapchain_extent.width as f32)
-            .height(self.swapchain_extent.height as f32)
+            .width(self.render_targets.swapchain_extent().width as f32)
+            .height(self.render_targets.swapchain_extent().height as f32)
             .min_depth(0.)
             .max_depth(1.)];
         let scissors = [vk::Rect2D::default()
             .offset(vk::Offset2D { x: 0, y: 0 })
-            .extent(self.swapchain_extent)];
+            .extent(self.render_targets.swapchain_extent())];
         unsafe {
-            self.device.cmd_set_viewport(command_buffer, 0, &viewports);
-            self.device.cmd_set_scissor(command_buffer, 0, &scissors);
-            self.device.cmd_draw(command_buffer, 3, 1, 0, 0);
-            self.device.cmd_end_render_pass(command_buffer);
-            self.device.end_command_buffer(command_buffer)?;
+            self.context.device().cmd_set_viewport(command_buffer, 0, &viewports);
+            self.context.device().cmd_set_scissor(command_buffer, 0, &scissors);
+            self.context.device().cmd_draw(command_buffer, 3, 1, 0, 0);
+            self.context.device().cmd_end_render_pass(command_buffer);
+            self.context.device().end_command_buffer(command_buffer)?;
         }
         Ok(())
     }
 
-    fn wait_for_in_flight_fence(&self) -> VkResult<()> {
-        let fences = [self.in_flight_fences[self.current_frame]];
-        unsafe {
-            self.device.wait_for_fences(&fences, true, u64::MAX)?;
-            self.device.reset_fences(&fences)?;
-        }
-        Ok(())
-    }
-
-    fn acquire_next_image(&self) -> VkResult<u32> {
-        let index = unsafe {
-            self.swapchain_device.acquire_next_image(
-                self.swapchain, u64::MAX,
-                self.image_available_semaphores[self.current_frame],
-                vk::Fence::null(),
-            )?.0
-        };
-        Ok(index)
-    }
-
-    fn reset_command_buffer(&self) -> VkResult<()> {
-        unsafe {
-            self.device.reset_command_buffer(self.command_buffers[self.current_frame],
-                                             vk::CommandBufferResetFlags::empty())
-        }
-    }
-
-    fn submit_command_buffer(&self) -> VkResult<()> {
-        let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
+    pub fn submit_command_buffer(&self) -> VkResult<()> {
+        let wait_semaphores = [self.interface.sync_objects().image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = [self.command_buffers[self.current_frame]];
-        let signal_semaphores = [self.render_finished_semaphores[self.current_frame]];
+        let command_buffers = [self.interface.command_buffers()[self.current_frame]];
+        let signal_semaphores = [self.interface.sync_objects().render_finished_semaphores[self.current_frame]];
 
         let submit_info = vk::SubmitInfo::default()
             .wait_semaphores(&wait_semaphores)
@@ -168,16 +145,18 @@ impl VulkanRenderer {
             .signal_semaphores(&signal_semaphores);
 
         unsafe {
-            self.device.queue_submit(
-                self.queues.graphics_queue, &[submit_info],
-                self.in_flight_fences[self.current_frame],
+            self.context.device().queue_submit(
+                self.interface.queues().graphics_queue(), &[submit_info],
+                self.interface.sync_objects().in_flight_fences[self.current_frame],
             )
         }
     }
 
-    fn present_image(&self, image_index: u32) -> VkResult<()> {
-        let wait_semaphores = [self.render_finished_semaphores[self.current_frame]];
-        let swapchains = [self.swapchain];
+    pub fn present_image(&self, image_index: u32) -> VkResult<()> {
+        let wait_semaphores = [
+            self.interface.sync_objects().render_finished_semaphores[self.current_frame]
+        ];
+        let swapchains = [self.render_targets.swapchain()];
         let image_indices = [image_index];
 
         let present_info = vk::PresentInfoKHR::default()
@@ -186,8 +165,8 @@ impl VulkanRenderer {
             .image_indices(&image_indices);
 
         unsafe {
-            self.swapchain_device.queue_present(
-                self.queues.present_queue, &present_info,
+            self.render_targets.swapchain_device().queue_present(
+                self.interface.queues().present_queue(), &present_info,
             ).map(|_| ())
         }
     }
@@ -196,39 +175,15 @@ impl VulkanRenderer {
 impl Drop for VulkanRenderer {
     fn drop(&mut self) {
         unsafe {
-            if let Err(err) = self.device.device_wait_idle() {
+            if let Err(err) = self.context.device().device_wait_idle() {
                 eprintln!("Failed to wait for vulkan device to be idle: {err}.
                            Attempting to clean resources anyway...");
             }
 
-            for semaphore in self.image_available_semaphores.iter() {
-                self.device.destroy_semaphore(*semaphore, None);
-            }
-            for semaphore in self.render_finished_semaphores.iter() {
-                self.device.destroy_semaphore(*semaphore, None);
-            }
-            for fence in self.in_flight_fences.iter() {
-                self.device.destroy_fence(*fence, None);
-            }
-            self.device.destroy_command_pool(self.command_pool, None);
-            for framebuffer in self.framebuffers.iter() {
-                self.device.destroy_framebuffer(*framebuffer, None);
-            }
-            self.device.destroy_pipeline(self.pipeline, None);
-            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.destroy_render_pass(self.render_pass, None);
-            for image_view in self.swapchain_image_views.iter() {
-                self.device.destroy_image_view(*image_view, None);
-            }
-            self.swapchain_device.destroy_swapchain(self.swapchain, None);
-            self.device.destroy_device(None);
-            #[cfg(feature = "validation_layers")] {
-                ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)
-                    .destroy_debug_utils_messenger(self.debug_messenger, None);
-            }
-            ash::khr::surface::Instance::new(&self.entry, &self.instance)
-                .destroy_surface(self.surface, None);
-            self.instance.destroy_instance(None);
+            self.interface.destroy(&self.context);
+            self.render_targets.destroy(&self.context);
+            self.context.destroy();
         }
     }
 }
+

@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use ash::vk;
 use crate::utils::{PipeLine, Result};
-use crate::vulkan_renderer::errors::{FailedToReadShaderCode, ShaderCodeBadLen};
+use super::super::super::errors::{FailedToReadShaderCode, ShaderCodeBadLen};
 
 const VERT_SHADER_PATH: &str = "./shaders/build/shader.vert.spv";
 const FRAG_SHADER_PATH: &str = "./shaders/build/shader.frag.spv";

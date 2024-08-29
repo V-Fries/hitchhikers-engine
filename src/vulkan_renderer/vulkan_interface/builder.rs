@@ -8,6 +8,7 @@ pub struct VulkanInterfaceBuilder<'a> {
     context: &'a VulkanContext,
 
     queues: Option<Queues>,
+    queue_families: QueueFamilies,
 
     command_pool: Option<vk::CommandPool>,
     command_buffers: Option<[vk::CommandBuffer; NB_OF_FRAMES_IN_FLIGHT_USIZE]>,
@@ -16,9 +17,10 @@ pub struct VulkanInterfaceBuilder<'a> {
 }
 
 impl<'a> VulkanInterfaceBuilder<'a> {
-    pub fn new(context: &'a VulkanContext) -> Self {
+    pub fn new(context: &'a VulkanContext, queue_families: QueueFamilies) -> Self {
         Self {
             context,
+            queue_families,
             queues: None,
             command_pool: None,
             command_buffers: None,
@@ -28,7 +30,10 @@ impl<'a> VulkanInterfaceBuilder<'a> {
 
     pub unsafe fn build(mut self) -> VulkanInterface {
         VulkanInterface {
+            is_destroyed: false,
+
             queues: self.queues.take().unwrap(),
+            queue_families: self.queue_families,
 
             command_pool: self.command_pool.take().unwrap(),
             command_buffers: self.command_buffers.take().unwrap(),
@@ -37,17 +42,15 @@ impl<'a> VulkanInterfaceBuilder<'a> {
         }
     }
 
-    pub unsafe fn create_queues(mut self, queue_families: QueueFamilies) -> Self {
-        self.queues = Some(Queues::new(self.context, queue_families));
+    pub unsafe fn create_queues(mut self) -> Self {
+        self.queues = Some(Queues::new(self.context, self.queue_families));
         self
     }
 
-    pub unsafe fn create_command_pool(mut self,
-                                      queue_families: QueueFamilies)
-                                      -> Result<Self> {
+    pub unsafe fn create_command_pool(mut self) -> Result<Self> {
         let create_info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(queue_families.graphics_index);
+            .queue_family_index(self.queue_families.graphics_index);
 
         self.command_pool = unsafe {
             self.context.device()

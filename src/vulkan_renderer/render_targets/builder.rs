@@ -46,6 +46,8 @@ impl<'a> RenderTargetsBuilder<'a> {
 
     pub unsafe fn build(mut self) -> RenderTargets {
         RenderTargets {
+            is_destroyed: false,
+
             swapchain_device: self.swapchain_device.take().unwrap(),
             swapchain: self.swapchain.take().unwrap(),
             swapchain_images: self.swapchain_images.take().unwrap(),

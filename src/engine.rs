@@ -1,7 +1,6 @@
 mod errors;
 
 use std::ffi::CStr;
-use ash::prelude::VkResult;
 use ash::vk;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -36,15 +35,27 @@ impl Engine {
         })
     }
 
-    pub fn render_frame(&mut self) -> VkResult<()> {
-        self.vulkan_renderer.render_frame()
+    pub fn render_frame(&mut self) -> Result<()> {
+        self.vulkan_renderer.render_frame(&self.window)
     }
 
-    pub fn handle_event(&mut self, event: WindowEvent) {
-        let (_, _) = (self, event);
+    pub fn handle_event(&mut self, event: &WindowEvent) -> Result<()> {
+        match event {
+            WindowEvent::ScaleFactorChanged {scale_factor: _, inner_size_writer: _}
+            | WindowEvent::Resized(_) => {
+                // TODO maybe handle minimization differently?
+                unsafe { self.vulkan_renderer.recreate_swapchain(&self.window) }
+            },
+            _ => { Ok(()) }
+        }
     }
 
     pub fn window(&self) -> &Window {
         &self.window
     }
+
+    pub unsafe fn destroy(&mut self) {
+        self.vulkan_renderer.destroy();
+    }
 }
+

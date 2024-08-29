@@ -29,13 +29,11 @@ struct ScoredPhysicalDeviceData {
 }
 
 impl PhysicalDeviceData {
-    pub fn new(entry: &ash::Entry,
+    pub fn new(surface_instance: &ash::khr::surface::Instance,
                instance: &ash::Instance,
                surface: vk::SurfaceKHR,
                window_inner_size: winit::dpi::PhysicalSize<u32>)
                -> Result<PhysicalDeviceData> {
-        let surface_instance = ash::khr::surface::Instance::new(entry, instance);
-
         unsafe { instance.enumerate_physical_devices()? }
             .into_iter()
             .filter_map(|device| {

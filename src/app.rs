@@ -32,15 +32,32 @@ impl ApplicationHandler for App {
 
         match event {
             WindowEvent::CloseRequested => {
-                event_loop.exit();
-                self.engine = None;
+                self.exit(event_loop);
             }
             WindowEvent::RedrawRequested => {
-                engine.render_frame()
-                    .expect("Failed to render a frame");
+                if let Err(err) = engine.render_frame() {
+                    eprintln!("Failed to render frame: {err}");
+                    self.exit(event_loop);
+                    return;
+                }
                 engine.window().request_redraw();
             }
-            _ => engine.handle_event(event)
+            _ => {
+                if let Err(err) = engine.handle_event(&event) {
+                    eprintln!("Failed to handle event ({event:?}): {err}");
+                    self.exit(event_loop);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+impl App {
+    fn exit(&mut self, event_loop: &ActiveEventLoop) {
+        event_loop.exit();
+        if let Some(mut engine) = self.engine.take() {
+            unsafe { engine.destroy() };
         }
     }
 }

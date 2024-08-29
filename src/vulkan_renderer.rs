@@ -7,8 +7,9 @@ use crate::utils::{Result, PipeLine};
 use ash::{prelude::VkResult, vk};
 use builder::VulkanRendererBuilder;
 use render_targets::RenderTargets;
-use vulkan_context::VulkanContext;
+use vulkan_context::{create_device, PhysicalDeviceData, SwapchainBuilder, VulkanContext};
 use vulkan_interface::VulkanInterface;
+use winit::window::Window;
 
 const NB_OF_FRAMES_IN_FLIGHT: u32 = 2;
 const NB_OF_FRAMES_IN_FLIGHT_USIZE: usize = NB_OF_FRAMES_IN_FLIGHT as usize;
@@ -19,6 +20,13 @@ pub struct VulkanRenderer {
     render_targets: RenderTargets,
 
     current_frame: usize,
+}
+
+type ShouldStopRenderingFrame = bool;
+
+enum NextImage {
+    Index(u32),
+    ShouldStopRenderingFrame
 }
 
 impl VulkanRenderer {
@@ -33,50 +41,79 @@ impl VulkanRenderer {
         }
     }
 
-    pub fn render_frame(&mut self) -> VkResult<()> {
+    pub fn render_frame(&mut self, window: &Window) -> Result<()> {
         self.wait_for_in_flight_fence()?;
 
-        let image_index = self.acquire_next_image()?;
+        let NextImage::Index(image_index) = self.acquire_next_image(window)? else {
+            return Ok(())
+        };
+
+        self.reset_in_flight_fence()?;
 
         self.reset_command_buffer()?;
         self.record_command_buffer(image_index)?;
 
         self.submit_command_buffer()?;
-        self.present_image(image_index)?;
+        if self.present_image(image_index, window)? {
+            return Ok(());
+        }
 
         self.current_frame = (self.current_frame + 1) % NB_OF_FRAMES_IN_FLIGHT_USIZE;
         Ok(())
     } 
 
-    pub fn wait_for_in_flight_fence(&self) -> VkResult<()> {
-        let fences = [self.interface.sync_objects().in_flight_fences[self.current_frame]];
+    fn wait_for_in_flight_fence(&self) -> VkResult<()> {
         unsafe {
-            self.context.device().wait_for_fences(&fences, true, u64::MAX)?;
-            self.context.device().reset_fences(&fences)?;
+            self.context.device().wait_for_fences(
+                &[self.interface.sync_objects().in_flight_fences[self.current_frame]],
+                true,
+                u64::MAX
+            )
         }
-        Ok(())
     }
 
-    pub fn acquire_next_image(&self) -> VkResult<u32> {
-        let index = unsafe {
+    fn reset_in_flight_fence(&self) -> VkResult<()> {
+        unsafe {
+            self.context.device().reset_fences(
+                &[self.interface.sync_objects().in_flight_fences[self.current_frame]]
+            )
+        }
+    }
+
+    fn acquire_next_image(&mut self, window: &Window) -> Result<NextImage> {
+        match unsafe {
             self.render_targets.swapchain_device().acquire_next_image(
                 self.render_targets.swapchain(),
                 u64::MAX,
                 self.interface.sync_objects().image_available_semaphores[self.current_frame],
                 vk::Fence::null(),
-            )?.0
+            )
+        } {
+            Ok((index, is_suboptimal)) => {
+                if !is_suboptimal {
+                    return Ok(NextImage::Index(index));
+                }
+            }
+            Err(err) => {
+                if err != vk::Result::ERROR_OUT_OF_DATE_KHR {
+                    return Err(err.into());
+                }
+            }
         };
-        Ok(index)
+        // TODO the image available semaphore is left signaled and unused!!
+        //      to test this easily, disable Resized event handling
+        unsafe { self.recreate_swapchain(window)?; }
+        Ok(NextImage::ShouldStopRenderingFrame)
     }
 
-    pub fn reset_command_buffer(&self) -> VkResult<()> {
+    fn reset_command_buffer(&self) -> VkResult<()> {
         unsafe {
             self.context.device().reset_command_buffer(self.interface.command_buffers()[self.current_frame],
                                                   vk::CommandBufferResetFlags::empty())
         }
     }
 
-    pub fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
+    fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
         // TODO refactor
         let begin_info = vk::CommandBufferBeginInfo::default();
         let command_buffer = self.interface.command_buffers()[self.current_frame];
@@ -132,7 +169,7 @@ impl VulkanRenderer {
         Ok(())
     }
 
-    pub fn submit_command_buffer(&self) -> VkResult<()> {
+    fn submit_command_buffer(&self) -> VkResult<()> {
         let wait_semaphores = [self.interface.sync_objects().image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = [self.interface.command_buffers()[self.current_frame]];
@@ -152,7 +189,7 @@ impl VulkanRenderer {
         }
     }
 
-    pub fn present_image(&self, image_index: u32) -> VkResult<()> {
+    fn present_image(&mut self, image_index: u32, window: &Window) -> Result<ShouldStopRenderingFrame> {
         let wait_semaphores = [
             self.interface.sync_objects().render_finished_semaphores[self.current_frame]
         ];
@@ -164,18 +201,90 @@ impl VulkanRenderer {
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
-        unsafe {
+        match unsafe {
             self.render_targets.swapchain_device().queue_present(
                 self.interface.queues().present_queue(), &present_info,
-            ).map(|_| ())
-        }
+            )
+        } {
+            Ok(is_suboptimal) => {
+                if !is_suboptimal {
+                    return Ok(false);
+                }
+            }
+            Err(err) => {
+                if err != vk::Result::ERROR_OUT_OF_DATE_KHR {
+                    return Err(err.into());
+                }
+            }
+        };
+        unsafe { self.recreate_swapchain(window)?; }
+        Ok(true)
     }
-}
 
-impl Drop for VulkanRenderer {
-    fn drop(&mut self) {
+    pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
+        if let Err(err) = unsafe { self.context.device().device_wait_idle() } {
+            eprintln!("Swapchain could not be updated: Failed to wait for vulkan device to be idle: {err}.");
+            return Ok(());
+        }
+
+        self.render_targets.destroy(&self.context);
+
+        let swapchain_builder = self.create_swapchain_builder(window)?;
+
+        // TODO this can be optimized as the render pass doesn't always
+        //      need to be recreated
+        // TODO do research about the following statement:
+        //      It is possible to create a new swap chain while drawing
+        //      commands on an image from the old swap chain are still
+        //      in-flight. You need to pass the previous swap chain to the
+        //      oldSwapChain field in the VkSwapchainCreateInfoKHR struct
+        //      and destroy the old swap chain as soon as you've finished
+        //      using it.
+
+        self.render_targets = RenderTargets::new(&self.context, swapchain_builder)?;
+        Ok(())
+    }
+
+    pub unsafe fn create_swapchain_builder(&mut self,
+                                           window: &Window)
+                                           -> Result<SwapchainBuilder> {
+        let window_inner_size = window.inner_size();
+
+        if let Ok(swapchain_builder) = SwapchainBuilder::new(
+            self.context.physical_device(),
+            self.interface.queue_families(),
+            self.context.surface_instance(),
+            self.context.surface(),
+            window_inner_size
+        ) {
+            return Ok(swapchain_builder);
+        }
+
+        self.interface.destroy(&self.context);
+        self.context.destroy_device();
+
+        let physical_device_data = PhysicalDeviceData::new(
+            self.context.surface_instance(),
+            self.context.instance(),
+            self.context.surface(),
+            window_inner_size,
+        )?;
+
+        self.context.set_device(
+            create_device(self.context.instance(), &physical_device_data)?,
+            physical_device_data.physical_device
+        );
+
+        self.interface = VulkanInterface::new(
+            &self.context, physical_device_data.queue_families
+        )?;
+
+        Ok(physical_device_data.swapchain_builder)
+    }
+
+    pub unsafe fn destroy(&mut self) {
         unsafe {
-            if let Err(err) = self.context.device().device_wait_idle() {
+            if let Err(err) = self.context.device_wait_idle() {
                 eprintln!("Failed to wait for vulkan device to be idle: {err}.
                            Attempting to clean resources anyway...");
             }

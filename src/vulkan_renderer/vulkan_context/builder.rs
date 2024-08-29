@@ -8,11 +8,11 @@ pub use device::SwapchainBuilder;
 use crate::utils::{PipeLine, Result};
 #[cfg(feature = "validation_layers")]
 use validation_layers::{check_validation_layers, create_debug_messenger};
-use device::create_device;
+pub use device::create_device;
 use instance::create_instance;
 use ash::vk;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-use crate::vulkan_renderer::vulkan_context::builder::device::PhysicalDeviceData;
+pub use device::PhysicalDeviceData;
 use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
 use super::VulkanContext;
 
@@ -25,6 +25,7 @@ pub struct VulkanContextBuilder {
     debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
     surface: Option<vk::SurfaceKHR>,
+    surface_instance: Option<ash::khr::surface::Instance>,
 
     physical_device_data: Option<PhysicalDeviceData>,
     device: Option<ash::Device>,
@@ -40,8 +41,10 @@ impl VulkanContextBuilder {
                 instance: self.instance.take().unwrap(),
                 #[cfg(feature = "validation_layers")]
                 debug_messenger: self.debug_messenger.take().unwrap(),
+                surface_instance: self.surface_instance.take().unwrap(),
                 surface: self.surface.take().unwrap(),
                 device: self.device.take().unwrap(),
+                is_device_destroyed: false,
                 physical_device: physical_device_data.physical_device,
             },
             physical_device_data.queue_families,
@@ -78,6 +81,8 @@ impl VulkanContextBuilder {
                                  display_handle: RawDisplayHandle,
                                  window_handle: RawWindowHandle)
                                  -> Result<Self> {
+        self.surface_instance = ash::khr::surface::Instance::new(self.entry(), self.instance())
+            .pipe(Some);
         self.surface = unsafe {
             ash_window::create_surface(
                 self.entry(),
@@ -95,7 +100,7 @@ impl VulkanContextBuilder {
                                 window_inner_size: winit::dpi::PhysicalSize<u32>)
                                 -> Result<Self> {
         self.physical_device_data = PhysicalDeviceData::new(
-            self.entry(), self.instance(), self.surface(), window_inner_size,
+            self.surface_instance(), self.instance(), self.surface(), window_inner_size,
         )?
             .pipe(Some);
 
@@ -120,6 +125,10 @@ impl VulkanContextBuilder {
 
     unsafe fn physical_device(&self) -> &PhysicalDeviceData {
         self.physical_device_data.as_ref().unwrap()
+    }
+
+    unsafe fn surface_instance(&self) -> &ash::khr::surface::Instance {
+        self.surface_instance.as_ref().unwrap()
     }
 }
 
@@ -154,8 +163,7 @@ impl VulkanContextBuilder {
     fn destroy_surface(&mut self) {
         if let Some(surface) = self.surface.take() {
             unsafe {
-                ash::khr::surface::Instance::new(self.entry(), self.instance())
-                    .destroy_surface(surface, None);
+                self.surface_instance().destroy_surface(surface, None);
             }
         }
     }

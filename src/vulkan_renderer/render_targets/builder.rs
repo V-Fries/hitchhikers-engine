@@ -163,13 +163,12 @@ impl<'a> RenderTargetsBuilder<'a> {
                 self.context
                     .device()
                     .create_framebuffer(&create_info, None)
-                    .map_err(|err| {
+                    .inspect_err(|_| {
                         for framebuffer in framebuffers.iter() {
                             self.context
                                 .device()
                                 .destroy_framebuffer(*framebuffer, None);
                         }
-                        err
                     })?
             };
             framebuffers.push(framebuffer);

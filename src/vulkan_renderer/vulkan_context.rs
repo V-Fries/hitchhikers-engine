@@ -10,6 +10,7 @@ pub use queue_families::QueueFamilies;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 pub struct VulkanContext {
+    #[allow(dead_code)]
     entry: ash::Entry,
     instance: ash::Instance,
 

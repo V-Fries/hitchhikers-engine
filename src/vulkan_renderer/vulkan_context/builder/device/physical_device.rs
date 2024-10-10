@@ -39,7 +39,7 @@ impl PhysicalDeviceData {
             .filter_map(|device| {
                 match ScoredPhysicalDeviceData::new(
                     instance,
-                    &surface_instance,
+                    surface_instance,
                     surface,
                     window_inner_size,
                     device,

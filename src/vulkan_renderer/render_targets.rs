@@ -12,7 +12,9 @@ pub struct RenderTargets {
 
     swapchain_device: ash::khr::swapchain::Device,
     swapchain: vk::SwapchainKHR,
+    #[allow(dead_code)]
     swapchain_images: Vec<vk::Image>,
+    #[allow(dead_code)]
     swapchain_format: vk::Format,
     swapchain_extent: vk::Extent2D,
     swapchain_image_views: Vec<vk::ImageView>,

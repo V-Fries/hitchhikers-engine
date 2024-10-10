@@ -3,8 +3,6 @@ mod render_targets;
 mod vulkan_context;
 mod vulkan_interface;
 
-use core::ffi;
-
 use crate::utils::{PipeLine, Result};
 use crate::vertex::{self, Vertex};
 use ash::{prelude::VkResult, vk};
@@ -76,20 +74,35 @@ impl VulkanRenderer {
                 .allocate_memory(&alloc_info, None)
                 .unwrap()
                 .pipe(Some);
-            renderer.context.device().bind_buffer_memory(
-                renderer.vertex_buffer.unwrap(),
-                renderer.vertex_buffer_memory.unwrap(),
-                0,
-            ).unwrap();
+            renderer
+                .context
+                .device()
+                .bind_buffer_memory(
+                    renderer.vertex_buffer.unwrap(),
+                    renderer.vertex_buffer_memory.unwrap(),
+                    0,
+                )
+                .unwrap();
 
-            let vertex_buffer_data = renderer.context.device().map_memory(
-                renderer.vertex_buffer_memory.unwrap(),
-                0,
-                buffer_create_info.size,
-                vk::MemoryMapFlags::empty(),
-            ).unwrap();
-            std::ptr::copy_nonoverlapping(renderer.vertices.as_ptr(), vertex_buffer_data as *mut vertex::Vertex, buffer_create_info.size as usize);
-            renderer.context.device().unmap_memory(renderer.vertex_buffer_memory.unwrap());
+            let vertex_buffer_data = renderer
+                .context
+                .device()
+                .map_memory(
+                    renderer.vertex_buffer_memory.unwrap(),
+                    0,
+                    buffer_create_info.size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .unwrap();
+            std::ptr::copy_nonoverlapping(
+                renderer.vertices.as_ptr(),
+                vertex_buffer_data as *mut vertex::Vertex,
+                buffer_create_info.size as usize,
+            );
+            renderer
+                .context
+                .device()
+                .unmap_memory(renderer.vertex_buffer_memory.unwrap());
             Ok(renderer)
         }
     }
@@ -240,7 +253,12 @@ impl VulkanRenderer {
         let vertex_buffers = [self.vertex_buffer()];
         let offsets = [0];
         unsafe {
-            self.context.device().cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+            self.context.device().cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &vertex_buffers,
+                &offsets,
+            );
         }
 
         let viewports = [vk::Viewport::default()
@@ -260,7 +278,9 @@ impl VulkanRenderer {
             self.context
                 .device()
                 .cmd_set_scissor(command_buffer, 0, &scissors);
-            self.context.device().cmd_draw(command_buffer, self.vertices.len() as u32, 1, 0, 0);
+            self.context
+                .device()
+                .cmd_draw(command_buffer, self.vertices.len() as u32, 1, 0, 0);
             self.context.device().cmd_end_render_pass(command_buffer);
             self.context.device().end_command_buffer(command_buffer)?;
         }

@@ -1,9 +1,9 @@
 mod builder;
 
-use ash::vk;
 use crate::utils::{PipeLine, Result};
-use builder::SyncObjectsBuilder;
 use crate::vulkan_renderer::NB_OF_FRAMES_IN_FLIGHT_USIZE;
+use ash::vk;
+use builder::SyncObjectsBuilder;
 
 pub struct SyncObjects {
     pub image_available_semaphores: [vk::Semaphore; NB_OF_FRAMES_IN_FLIGHT_USIZE],

@@ -1,10 +1,11 @@
 use ash::prelude::VkResult;
 use ash::vk;
 
-pub fn create_image_views(device: &ash::Device,
-                          swapchain_images: &[vk::Image],
-                          format: vk::Format)
-                          -> VkResult<Vec<vk::ImageView>> {
+pub fn create_image_views(
+    device: &ash::Device,
+    swapchain_images: &[vk::Image],
+    format: vk::Format,
+) -> VkResult<Vec<vk::ImageView>> {
     swapchain_images
         .iter()
         .map(|image| {
@@ -14,24 +15,27 @@ pub fn create_image_views(device: &ash::Device,
         .collect::<VkResult<Vec<_>>>()
 }
 
-fn get_image_view_create_info(image: vk::Image,
-                              format: vk::Format)
-                              -> vk::ImageViewCreateInfo<'static> {
+fn get_image_view_create_info(
+    image: vk::Image,
+    format: vk::Format,
+) -> vk::ImageViewCreateInfo<'static> {
     vk::ImageViewCreateInfo::default()
         .image(image)
         .view_type(vk::ImageViewType::TYPE_2D)
         .format(format)
-        .components(vk::ComponentMapping::default()
-            .r(vk::ComponentSwizzle::IDENTITY)
-            .g(vk::ComponentSwizzle::IDENTITY)
-            .b(vk::ComponentSwizzle::IDENTITY)
-            .a(vk::ComponentSwizzle::IDENTITY)
+        .components(
+            vk::ComponentMapping::default()
+                .r(vk::ComponentSwizzle::IDENTITY)
+                .g(vk::ComponentSwizzle::IDENTITY)
+                .b(vk::ComponentSwizzle::IDENTITY)
+                .a(vk::ComponentSwizzle::IDENTITY),
         )
-        .subresource_range(vk::ImageSubresourceRange::default()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .base_mip_level(0)
-            .level_count(1)
-            .base_array_layer(0)
-            .layer_count(1)
+        .subresource_range(
+            vk::ImageSubresourceRange::default()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1),
         )
 }

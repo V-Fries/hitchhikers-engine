@@ -1,15 +1,17 @@
 mod builder;
+mod render_targets;
 mod vulkan_context;
 mod vulkan_interface;
-mod render_targets;
 
-use crate::utils::{Result, PipeLine};
+use core::ffi;
+
+use crate::utils::{PipeLine, Result};
+use crate::vertex::{self, Vertex};
 use ash::{prelude::VkResult, vk};
 use builder::VulkanRendererBuilder;
 use render_targets::RenderTargets;
 use vulkan_context::{create_device, PhysicalDeviceData, SwapchainBuilder, VulkanContext};
 use vulkan_interface::VulkanInterface;
-use winit::window::Window;
 
 const NB_OF_FRAMES_IN_FLIGHT: u32 = 2;
 const NB_OF_FRAMES_IN_FLIGHT_USIZE: usize = NB_OF_FRAMES_IN_FLIGHT as usize;
@@ -18,6 +20,10 @@ pub struct VulkanRenderer {
     context: VulkanContext,
     interface: VulkanInterface,
     render_targets: RenderTargets,
+    // TODO remove this
+    vertices: Vec<Vertex>,
+    vertex_buffer: Option<vk::Buffer>,
+    vertex_buffer_memory: Option<vk::DeviceMemory>,
 
     current_frame: usize,
 }
@@ -26,26 +32,100 @@ type ShouldStopRenderingFrame = bool;
 
 enum NextImage {
     Index(u32),
-    ShouldStopRenderingFrame
+    ShouldStopRenderingFrame,
 }
 
 impl VulkanRenderer {
     pub fn new(window: &winit::window::Window) -> Result<Self> {
         unsafe {
-            VulkanRendererBuilder::default()
+            // TODO don't store in variable return directly
+            let mut renderer = VulkanRendererBuilder::default()
                 .create_context(window)?
                 .create_interface()?
                 .create_render_targets()?
-                .build()
-                .pipe(Ok)
+                .build();
+
+            // TODO delete everything below this
+            let buffer_create_info = vk::BufferCreateInfo::default()
+                .size((size_of_val(&renderer.vertices[0]) * renderer.vertices.len()) as u64)
+                .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            renderer.vertex_buffer = renderer
+                .context
+                .device()
+                .create_buffer(&buffer_create_info, None)?
+                .pipe(Some);
+            let memory_requirements = renderer
+                .context
+                .device()
+                .get_buffer_memory_requirements(renderer.vertex_buffer());
+            let alloc_info = vk::MemoryAllocateInfo::default()
+                .allocation_size(memory_requirements.size)
+                .memory_type_index(
+                    renderer
+                        .find_memory_type(
+                            memory_requirements.memory_type_bits,
+                            vk::MemoryPropertyFlags::HOST_VISIBLE
+                                | vk::MemoryPropertyFlags::HOST_COHERENT,
+                        )
+                        .unwrap(),
+                );
+            renderer.vertex_buffer_memory = renderer
+                .context
+                .device()
+                .allocate_memory(&alloc_info, None)
+                .unwrap()
+                .pipe(Some);
+            renderer.context.device().bind_buffer_memory(
+                renderer.vertex_buffer.unwrap(),
+                renderer.vertex_buffer_memory.unwrap(),
+                0,
+            ).unwrap();
+
+            let vertex_buffer_data = renderer.context.device().map_memory(
+                renderer.vertex_buffer_memory.unwrap(),
+                0,
+                buffer_create_info.size,
+                vk::MemoryMapFlags::empty(),
+            ).unwrap();
+            std::ptr::copy_nonoverlapping(renderer.vertices.as_ptr(), vertex_buffer_data as *mut vertex::Vertex, buffer_create_info.size as usize);
+            renderer.context.device().unmap_memory(renderer.vertex_buffer_memory.unwrap());
+            Ok(renderer)
         }
     }
 
-    pub fn render_frame(&mut self, window: &Window) -> Result<()> {
+    // TODO delete this method
+    pub fn vertex_buffer(&self) -> vk::Buffer {
+        self.vertex_buffer.unwrap()
+    }
+
+    pub fn find_memory_type(
+        &self,
+        memory_type_filter: u32,
+        properties: vk::MemoryPropertyFlags,
+    ) -> Result<u32, ()> {
+        let memory_priority = unsafe {
+            self.context
+                .instance()
+                .get_physical_device_memory_properties(self.context.physical_device())
+        };
+
+        for (i, memory_type) in memory_priority.memory_types.iter().enumerate() {
+            if memory_type_filter & (1 << i) != 0
+                && memory_type.property_flags & properties == properties
+            {
+                return Ok(i as u32);
+            }
+        }
+        // TODO make a proper error
+        Err(())
+    }
+
+    pub fn render_frame(&mut self, window: &winit::window::Window) -> Result<()> {
         self.wait_for_in_flight_fence()?;
 
         let NextImage::Index(image_index) = self.acquire_next_image(window)? else {
-            return Ok(())
+            return Ok(());
         };
 
         self.reset_in_flight_fence()?;
@@ -60,27 +140,27 @@ impl VulkanRenderer {
 
         self.current_frame = (self.current_frame + 1) % NB_OF_FRAMES_IN_FLIGHT_USIZE;
         Ok(())
-    } 
+    }
 
     fn wait_for_in_flight_fence(&self) -> VkResult<()> {
         unsafe {
             self.context.device().wait_for_fences(
                 &[self.interface.sync_objects().in_flight_fences[self.current_frame]],
                 true,
-                u64::MAX
+                u64::MAX,
             )
         }
     }
 
     fn reset_in_flight_fence(&self) -> VkResult<()> {
         unsafe {
-            self.context.device().reset_fences(
-                &[self.interface.sync_objects().in_flight_fences[self.current_frame]]
-            )
+            self.context
+                .device()
+                .reset_fences(&[self.interface.sync_objects().in_flight_fences[self.current_frame]])
         }
     }
 
-    fn acquire_next_image(&mut self, window: &Window) -> Result<NextImage> {
+    fn acquire_next_image(&mut self, window: &winit::window::Window) -> Result<NextImage> {
         match unsafe {
             self.render_targets.swapchain_device().acquire_next_image(
                 self.render_targets.swapchain(),
@@ -102,14 +182,18 @@ impl VulkanRenderer {
         };
         // TODO the image available semaphore is left signaled and unused!!
         //      to test this easily, disable Resized event handling
-        unsafe { self.recreate_swapchain(window)?; }
+        unsafe {
+            self.recreate_swapchain(window)?;
+        }
         Ok(NextImage::ShouldStopRenderingFrame)
     }
 
     fn reset_command_buffer(&self) -> VkResult<()> {
         unsafe {
-            self.context.device().reset_command_buffer(self.interface.command_buffers()[self.current_frame],
-                                                  vk::CommandBufferResetFlags::empty())
+            self.context.device().reset_command_buffer(
+                self.interface.command_buffers()[self.current_frame],
+                vk::CommandBufferResetFlags::empty(),
+            )
         }
     }
 
@@ -119,15 +203,17 @@ impl VulkanRenderer {
         let command_buffer = self.interface.command_buffers()[self.current_frame];
 
         unsafe {
-            self.context.device().begin_command_buffer(command_buffer, &begin_info)?;
+            self.context
+                .device()
+                .begin_command_buffer(command_buffer, &begin_info)?;
         }
 
-        let clear_values = [
-            vk::ClearValue {
-                // TODO check if I should use float32
-                color: vk::ClearColorValue { uint32: [0, 0, 0, 1] }
-            }
-        ];
+        let clear_values = [vk::ClearValue {
+            // TODO check if I should use float32
+            color: vk::ClearColorValue {
+                uint32: [0, 0, 0, 1],
+            },
+        }];
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
             .render_pass(self.render_targets.render_pass())
             .framebuffer(self.render_targets.framebuffers()[image_index as usize])
@@ -139,7 +225,9 @@ impl VulkanRenderer {
 
         unsafe {
             self.context.device().cmd_begin_render_pass(
-                command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE,
+                command_buffer,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
             );
 
             self.context.device().cmd_bind_pipeline(
@@ -147,6 +235,12 @@ impl VulkanRenderer {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.render_targets.pipeline(),
             );
+        }
+
+        let vertex_buffers = [self.vertex_buffer()];
+        let offsets = [0];
+        unsafe {
+            self.context.device().cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
         }
 
         let viewports = [vk::Viewport::default()
@@ -160,9 +254,13 @@ impl VulkanRenderer {
             .offset(vk::Offset2D { x: 0, y: 0 })
             .extent(self.render_targets.swapchain_extent())];
         unsafe {
-            self.context.device().cmd_set_viewport(command_buffer, 0, &viewports);
-            self.context.device().cmd_set_scissor(command_buffer, 0, &scissors);
-            self.context.device().cmd_draw(command_buffer, 3, 1, 0, 0);
+            self.context
+                .device()
+                .cmd_set_viewport(command_buffer, 0, &viewports);
+            self.context
+                .device()
+                .cmd_set_scissor(command_buffer, 0, &scissors);
+            self.context.device().cmd_draw(command_buffer, self.vertices.len() as u32, 1, 0, 0);
             self.context.device().cmd_end_render_pass(command_buffer);
             self.context.device().end_command_buffer(command_buffer)?;
         }
@@ -170,10 +268,12 @@ impl VulkanRenderer {
     }
 
     fn submit_command_buffer(&self) -> VkResult<()> {
-        let wait_semaphores = [self.interface.sync_objects().image_available_semaphores[self.current_frame]];
+        let wait_semaphores =
+            [self.interface.sync_objects().image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = [self.interface.command_buffers()[self.current_frame]];
-        let signal_semaphores = [self.interface.sync_objects().render_finished_semaphores[self.current_frame]];
+        let signal_semaphores =
+            [self.interface.sync_objects().render_finished_semaphores[self.current_frame]];
 
         let submit_info = vk::SubmitInfo::default()
             .wait_semaphores(&wait_semaphores)
@@ -183,16 +283,20 @@ impl VulkanRenderer {
 
         unsafe {
             self.context.device().queue_submit(
-                self.interface.queues().graphics_queue(), &[submit_info],
+                self.interface.queues().graphics_queue(),
+                &[submit_info],
                 self.interface.sync_objects().in_flight_fences[self.current_frame],
             )
         }
     }
 
-    fn present_image(&mut self, image_index: u32, window: &Window) -> Result<ShouldStopRenderingFrame> {
-        let wait_semaphores = [
-            self.interface.sync_objects().render_finished_semaphores[self.current_frame]
-        ];
+    fn present_image(
+        &mut self,
+        image_index: u32,
+        window: &winit::window::Window,
+    ) -> Result<ShouldStopRenderingFrame> {
+        let wait_semaphores =
+            [self.interface.sync_objects().render_finished_semaphores[self.current_frame]];
         let swapchains = [self.render_targets.swapchain()];
         let image_indices = [image_index];
 
@@ -202,9 +306,9 @@ impl VulkanRenderer {
             .image_indices(&image_indices);
 
         match unsafe {
-            self.render_targets.swapchain_device().queue_present(
-                self.interface.queues().present_queue(), &present_info,
-            )
+            self.render_targets
+                .swapchain_device()
+                .queue_present(self.interface.queues().present_queue(), &present_info)
         } {
             Ok(is_suboptimal) => {
                 if !is_suboptimal {
@@ -217,11 +321,13 @@ impl VulkanRenderer {
                 }
             }
         };
-        unsafe { self.recreate_swapchain(window)?; }
+        unsafe {
+            self.recreate_swapchain(window)?;
+        }
         Ok(true)
     }
 
-    pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
+    pub unsafe fn recreate_swapchain(&mut self, window: &winit::window::Window) -> Result<()> {
         if let Err(err) = unsafe { self.context.device().device_wait_idle() } {
             eprintln!("Swapchain could not be updated: Failed to wait for vulkan device to be idle: {err}.");
             return Ok(());
@@ -245,9 +351,10 @@ impl VulkanRenderer {
         Ok(())
     }
 
-    pub unsafe fn create_swapchain_builder(&mut self,
-                                           window: &Window)
-                                           -> Result<SwapchainBuilder> {
+    pub unsafe fn create_swapchain_builder(
+        &mut self,
+        window: &winit::window::Window,
+    ) -> Result<SwapchainBuilder> {
         let window_inner_size = window.inner_size();
 
         if let Ok(swapchain_builder) = SwapchainBuilder::new(
@@ -255,7 +362,7 @@ impl VulkanRenderer {
             self.interface.queue_families(),
             self.context.surface_instance(),
             self.context.surface(),
-            window_inner_size
+            window_inner_size,
         ) {
             return Ok(swapchain_builder);
         }
@@ -272,27 +379,31 @@ impl VulkanRenderer {
 
         self.context.set_device(
             create_device(self.context.instance(), &physical_device_data)?,
-            physical_device_data.physical_device
+            physical_device_data.physical_device,
         );
 
-        self.interface = VulkanInterface::new(
-            &self.context, physical_device_data.queue_families
-        )?;
+        self.interface = VulkanInterface::new(&self.context, physical_device_data.queue_families)?;
 
         Ok(physical_device_data.swapchain_builder)
     }
 
     pub unsafe fn destroy(&mut self) {
-        unsafe {
-            if let Err(err) = self.context.device_wait_idle() {
-                eprintln!("Failed to wait for vulkan device to be idle: {err}.
-                           Attempting to clean resources anyway...");
-            }
-
-            self.interface.destroy(&self.context);
-            self.render_targets.destroy(&self.context);
-            self.context.destroy();
+        if let Err(err) = self.context.device_wait_idle() {
+            eprintln!(
+                "Failed to wait for vulkan device to be idle: {err}.
+                       Attempting to clean resources anyway..."
+            );
         }
+        // TODO delete these lines
+        self.context
+            .device()
+            .destroy_buffer(self.vertex_buffer(), None);
+        self.context
+            .device()
+            .free_memory(self.vertex_buffer_memory.unwrap(), None);
+
+        self.interface.destroy(&self.context);
+        self.render_targets.destroy(&self.context);
+        self.context.destroy();
     }
 }
-

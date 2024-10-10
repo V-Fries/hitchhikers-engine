@@ -1,14 +1,14 @@
 mod errors;
 
-use std::ffi::CStr;
+use crate::const_str_to_cstr;
+use crate::engine::errors::{FailedToCreateWindow, FailedToInitVulkan};
+use crate::utils::Result;
+use crate::vulkan_renderer::VulkanRenderer;
 use ash::vk;
+use std::ffi::CStr;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
-use crate::utils::Result;
-use crate::const_str_to_cstr;
-use crate::engine::errors::{FailedToCreateWindow, FailedToInitVulkan};
-use crate::vulkan_renderer::VulkanRenderer;
 
 pub const ENGINE_NAME: &str = "HitchHiker's Engine";
 pub const ENGINE_NAME_CSTR: &CStr = const_str_to_cstr!(ENGINE_NAME);
@@ -22,15 +22,14 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(event_loop: &ActiveEventLoop) -> Result<Self> {
-        let window_attributes = Window::default_attributes()
-            .with_title(ENGINE_NAME);
+        let window_attributes = Window::default_attributes().with_title(ENGINE_NAME);
 
-        let window = event_loop.create_window(window_attributes)
+        let window = event_loop
+            .create_window(window_attributes)
             .map_err(FailedToCreateWindow::new)?;
 
         Ok(Self {
-            vulkan_renderer: VulkanRenderer::new(&window)
-                .map_err(FailedToInitVulkan::new)?,
+            vulkan_renderer: VulkanRenderer::new(&window).map_err(FailedToInitVulkan::new)?,
             window,
         })
     }
@@ -41,12 +40,15 @@ impl Engine {
 
     pub fn handle_event(&mut self, event: &WindowEvent) -> Result<()> {
         match event {
-            WindowEvent::ScaleFactorChanged {scale_factor: _, inner_size_writer: _}
+            WindowEvent::ScaleFactorChanged {
+                scale_factor: _,
+                inner_size_writer: _,
+            }
             | WindowEvent::Resized(_) => {
                 // TODO maybe handle minimization differently?
                 unsafe { self.vulkan_renderer.recreate_swapchain(&self.window) }
-            },
-            _ => { Ok(()) }
+            }
+            _ => Ok(()),
         }
     }
 
@@ -58,4 +60,3 @@ impl Engine {
         self.vulkan_renderer.destroy();
     }
 }
-

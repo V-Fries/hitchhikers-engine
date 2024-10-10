@@ -15,7 +15,10 @@ impl ColorBlendStateCreateInfo<'_> {
             p_attachments: color_blend_attachment_state.as_ptr(),
             ..Default::default()
         };
-        Self { color_blend_attachment_state, create_info }
+        Self {
+            color_blend_attachment_state,
+            create_info,
+        }
     }
 
     pub fn create_info(&self) -> &vk::PipelineColorBlendStateCreateInfo {
@@ -23,21 +26,20 @@ impl ColorBlendStateCreateInfo<'_> {
     }
 
     fn create_color_blend_attachment_state() -> Box<[vk::PipelineColorBlendAttachmentState]> {
-        vec![
-            vk::PipelineColorBlendAttachmentState::default()
-                .color_write_mask(
-                    vk::ColorComponentFlags::R
-                        | vk::ColorComponentFlags::G
-                        | vk::ColorComponentFlags::B
-                        | vk::ColorComponentFlags::A
-                )
-                .blend_enable(false)
-                .src_color_blend_factor(vk::BlendFactor::ONE)
-                .dst_color_blend_factor(vk::BlendFactor::ZERO)
-                .color_blend_op(vk::BlendOp::ADD)
-                .src_alpha_blend_factor(vk::BlendFactor::ONE)
-                .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-                .alpha_blend_op(vk::BlendOp::ADD)
-        ].into_boxed_slice()
+        vec![vk::PipelineColorBlendAttachmentState::default()
+            .color_write_mask(
+                vk::ColorComponentFlags::R
+                    | vk::ColorComponentFlags::G
+                    | vk::ColorComponentFlags::B
+                    | vk::ColorComponentFlags::A,
+            )
+            .blend_enable(false)
+            .src_color_blend_factor(vk::BlendFactor::ONE)
+            .dst_color_blend_factor(vk::BlendFactor::ZERO)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ONE)
+            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .alpha_blend_op(vk::BlendOp::ADD)]
+        .into_boxed_slice()
     }
 }

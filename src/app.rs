@@ -16,16 +16,12 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let engine = Engine::new(event_loop)
-            .expect("Failed to init Engine");
+        let engine = Engine::new(event_loop).expect("Failed to init Engine");
         engine.window().request_redraw();
         self.engine = Some(engine);
     }
 
-    fn window_event(&mut self,
-                    event_loop: &ActiveEventLoop,
-                    _id: WindowId,
-                    event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         let Some(engine) = &mut self.engine else {
             return;
         };

@@ -385,6 +385,7 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "ash-window",
+ "linear_algebra",
  "winit",
 ]
 
@@ -497,6 +498,10 @@ dependencies = [
  "libc",
  "redox_syscall",
 ]
+
+[[package]]
+name = "linear_algebra"
+version = "0.1.0"
 
 [[package]]
 name = "linux-raw-sys"

@@ -1,18 +1,16 @@
-use std::collections::HashSet;
 use ash::prelude::VkResult;
 use ash::vk;
+use std::collections::HashSet;
 
 use crate::utils::{GetAllUniques, PipeLine, Result};
 use crate::vulkan_renderer::vulkan_context::errors::PhysicalDeviceIsNotSuitable;
 use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
 
 // Sorted in order of preference
-const PREFERRED_FORMATS: &[vk::SurfaceFormatKHR] = &[
-    vk::SurfaceFormatKHR {
-        format: vk::Format::B8G8R8A8_SRGB,
-        color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-    },
-];
+const PREFERRED_FORMATS: &[vk::SurfaceFormatKHR] = &[vk::SurfaceFormatKHR {
+    format: vk::Format::B8G8R8A8_SRGB,
+    color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+}];
 
 // Sorted in order of preference
 const PREFERRED_PRESENTATION_MODES: &[vk::PresentModeKHR] = &[
@@ -36,34 +34,34 @@ pub struct SwapchainBuilder {
 }
 
 impl SwapchainBuilder {
-    pub fn new(device: vk::PhysicalDevice,
-               queue_family: QueueFamilies,
-               surface_instance: &ash::khr::surface::Instance,
-               surface: vk::SurfaceKHR,
-               window_inner_size: winit::dpi::PhysicalSize<u32>)
-               -> Result<Self> {
-        let capabilities = unsafe {
-            surface_instance.get_physical_device_surface_capabilities(device, surface)?
-        };
+    pub fn new(
+        device: vk::PhysicalDevice,
+        queue_family: QueueFamilies,
+        surface_instance: &ash::khr::surface::Instance,
+        surface: vk::SurfaceKHR,
+        window_inner_size: winit::dpi::PhysicalSize<u32>,
+    ) -> Result<Self> {
+        let capabilities =
+            unsafe { surface_instance.get_physical_device_surface_capabilities(device, surface)? };
         Ok(Self {
             capabilities,
             format: Self::choose_surface_format(surface_instance, device, surface)?,
             present_mode: Self::choose_present_mode(surface_instance, device, surface)?,
             extent: Self::choose_extent(capabilities, window_inner_size),
             image_count: Self::choose_image_count(capabilities)?,
-            queues_working_on_images: [
-                queue_family.present_index,
-                queue_family.graphics_index
-            ],
+            queues_working_on_images: [queue_family.present_index, queue_family.graphics_index],
         })
     }
 
-    pub fn build(&self,
-                 instance: &ash::Instance,
-                 surface: vk::SurfaceKHR,
-                 device: &ash::Device)
-                 -> VkResult<(vk::SwapchainKHR, ash::khr::swapchain::Device)> {
-        let unique_queues = self.queues_working_on_images.into_iter()
+    pub fn build(
+        &self,
+        instance: &ash::Instance,
+        surface: vk::SurfaceKHR,
+        device: &ash::Device,
+    ) -> VkResult<(vk::SwapchainKHR, ash::khr::swapchain::Device)> {
+        let unique_queues = self
+            .queues_working_on_images
+            .into_iter()
             .get_all_uniques::<Vec<_>>();
         let create_info = self.get_create_info(surface, &unique_queues);
 
@@ -71,15 +69,16 @@ impl SwapchainBuilder {
         unsafe {
             Ok((
                 swapchain_device.create_swapchain(&create_info, None)?,
-                swapchain_device
+                swapchain_device,
             ))
         }
     }
 
-    fn get_create_info<'a>(&self,
-                           surface: vk::SurfaceKHR,
-                           unique_queues: &'a [u32])
-                           -> vk::SwapchainCreateInfoKHR<'a> {
+    fn get_create_info<'a>(
+        &self,
+        surface: vk::SurfaceKHR,
+        unique_queues: &'a [u32],
+    ) -> vk::SwapchainCreateInfoKHR<'a> {
         let create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface)
             .min_image_count(self.image_count)
@@ -94,7 +93,8 @@ impl SwapchainBuilder {
             .clipped(true); // May need to be false when accumulating ray tracing
 
         if self.queues_working_on_images.len() != 1
-            && unique_queues.len() == self.queues_working_on_images.len() {
+            && unique_queues.len() == self.queues_working_on_images.len()
+        {
             return create_info
                 .image_sharing_mode(vk::SharingMode::CONCURRENT)
                 .queue_family_indices(unique_queues);
@@ -102,10 +102,11 @@ impl SwapchainBuilder {
         create_info.image_sharing_mode(vk::SharingMode::EXCLUSIVE)
     }
 
-    fn choose_surface_format(surface_instance: &ash::khr::surface::Instance,
-                             device: vk::PhysicalDevice,
-                             surface: vk::SurfaceKHR)
-                             -> Result<vk::SurfaceFormatKHR> {
+    fn choose_surface_format(
+        surface_instance: &ash::khr::surface::Instance,
+        device: vk::PhysicalDevice,
+        surface: vk::SurfaceKHR,
+    ) -> Result<vk::SurfaceFormatKHR> {
         let formats = Self::get_set_of_available_formats(surface_instance, device, surface)?;
 
         for format in PREFERRED_FORMATS.iter() {
@@ -114,24 +115,27 @@ impl SwapchainBuilder {
             }
         }
 
-        let first_elem = formats.iter().next()
+        let first_elem = formats
+            .iter()
+            .next()
             .ok_or(PhysicalDeviceIsNotSuitable::new(
                 device,
                 "No supported swap chain format".to_string(),
             ))?;
-        println!("Preferred color format is not supported, the program will try \
-              running with another format");
+        println!(
+            "Preferred color format is not supported, the program will try \
+              running with another format"
+        );
         Ok(*first_elem)
     }
 
-    fn get_set_of_available_formats(surface_instance: &ash::khr::surface::Instance,
-                                    device: vk::PhysicalDevice,
-                                    surface: vk::SurfaceKHR)
-                                    -> Result<HashSet<vk::SurfaceFormatKHR>> {
-        let vec_of_available_formats = unsafe {
-            surface_instance
-                .get_physical_device_surface_formats(device, surface)?
-        };
+    fn get_set_of_available_formats(
+        surface_instance: &ash::khr::surface::Instance,
+        device: vk::PhysicalDevice,
+        surface: vk::SurfaceKHR,
+    ) -> Result<HashSet<vk::SurfaceFormatKHR>> {
+        let vec_of_available_formats =
+            unsafe { surface_instance.get_physical_device_surface_formats(device, surface)? };
 
         vec_of_available_formats
             .into_iter()
@@ -139,10 +143,11 @@ impl SwapchainBuilder {
             .pipe(Ok)
     }
 
-    fn choose_present_mode(surface_instance: &ash::khr::surface::Instance,
-                           device: vk::PhysicalDevice,
-                           surface: vk::SurfaceKHR)
-                           -> Result<vk::PresentModeKHR> {
+    fn choose_present_mode(
+        surface_instance: &ash::khr::surface::Instance,
+        device: vk::PhysicalDevice,
+        surface: vk::SurfaceKHR,
+    ) -> Result<vk::PresentModeKHR> {
         let formats = Self::get_set_of_available_present_modes(surface_instance, device, surface)?;
 
         for format in PREFERRED_PRESENTATION_MODES.iter() {
@@ -151,26 +156,27 @@ impl SwapchainBuilder {
             }
         }
 
-        let first_elem = formats.iter().next()
+        let first_elem = formats
+            .iter()
+            .next()
             .ok_or(PhysicalDeviceIsNotSuitable::new(
                 device,
                 "No supported swap chain present mode".to_string(),
             ))?;
-        println!("Preferred present mode is not supported, the program will try \
-              running with another present mode");
+        println!(
+            "Preferred present mode is not supported, the program will try \
+              running with another present mode"
+        );
         Ok(*first_elem)
     }
 
     fn get_set_of_available_present_modes(
         surface_instance: &ash::khr::surface::Instance,
         device: vk::PhysicalDevice,
-        surface: vk::SurfaceKHR)
-        -> Result<HashSet<vk::PresentModeKHR>>
-    {
-        let vec_of_available_formats = unsafe {
-            surface_instance
-                .get_physical_device_surface_present_modes(device, surface)?
-        };
+        surface: vk::SurfaceKHR,
+    ) -> Result<HashSet<vk::PresentModeKHR>> {
+        let vec_of_available_formats =
+            unsafe { surface_instance.get_physical_device_surface_present_modes(device, surface)? };
 
         vec_of_available_formats
             .into_iter()
@@ -178,8 +184,10 @@ impl SwapchainBuilder {
             .pipe(Ok)
     }
 
-    fn choose_extent(capabilities: vk::SurfaceCapabilitiesKHR,
-                     window_inner_size: winit::dpi::PhysicalSize<u32>) -> vk::Extent2D {
+    fn choose_extent(
+        capabilities: vk::SurfaceCapabilitiesKHR,
+        window_inner_size: winit::dpi::PhysicalSize<u32>,
+    ) -> vk::Extent2D {
         // https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain
         // according to this tutorial this should be used, but I haven't found
         // documentation proving it, so it's commented for now:
@@ -187,14 +195,17 @@ impl SwapchainBuilder {
         //     return capabilities.current_extent;
         // }
         vk::Extent2D::default()
-            .width(window_inner_size.width.clamp(capabilities.min_image_extent.width,
-                                                 capabilities.max_image_extent.width))
-            .height(window_inner_size.height.clamp(capabilities.min_image_extent.height,
-                                                   capabilities.max_image_extent.height))
+            .width(window_inner_size.width.clamp(
+                capabilities.min_image_extent.width,
+                capabilities.max_image_extent.width,
+            ))
+            .height(window_inner_size.height.clamp(
+                capabilities.min_image_extent.height,
+                capabilities.max_image_extent.height,
+            ))
     }
 
-    fn choose_image_count(capabilities: vk::SurfaceCapabilitiesKHR)
-                          -> Result<u32, &'static str> {
+    fn choose_image_count(capabilities: vk::SurfaceCapabilitiesKHR) -> Result<u32, &'static str> {
         // according to:
         // https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain
         // Using min image count could mean we have to wait on the driver to
@@ -211,7 +222,9 @@ impl SwapchainBuilder {
         if capabilities.max_image_count == 0 {
             return Ok(PREFERRED_IMAGE_COUNT.max(capabilities.min_image_count + 1));
         }
-        Ok(PREFERRED_IMAGE_COUNT.clamp(capabilities.min_image_count + 1,
-                                       capabilities.max_image_count))
+        Ok(PREFERRED_IMAGE_COUNT.clamp(
+            capabilities.min_image_count + 1,
+            capabilities.max_image_count,
+        ))
     }
 }

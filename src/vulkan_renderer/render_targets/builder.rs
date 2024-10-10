@@ -1,13 +1,13 @@
-mod image_views;
 mod graphics_pipeline;
+mod image_views;
 
 use ash::{prelude::VkResult, vk};
 
+use super::RenderTargets;
+use crate::utils::{PipeLine, Result};
 use crate::vulkan_renderer::vulkan_context::{SwapchainBuilder, VulkanContext};
 use graphics_pipeline::create_graphics_pipeline;
 use image_views::create_image_views;
-use super::RenderTargets;
-use crate::utils::{Result, PipeLine};
 
 pub struct RenderTargetsBuilder<'a> {
     context: &'a VulkanContext,
@@ -63,11 +63,11 @@ impl<'a> RenderTargetsBuilder<'a> {
         }
     }
 
-    pub unsafe fn create_swapchain(mut self,
-                                   swapchain_builder: SwapchainBuilder)
-                                   -> Result<Self> {
+    pub unsafe fn create_swapchain(mut self, swapchain_builder: SwapchainBuilder) -> Result<Self> {
         let (swapchain, swapchain_device) = swapchain_builder.build(
-            self.context.instance(), self.context.surface(), self.context.device(),
+            self.context.instance(),
+            self.context.surface(),
+            self.context.device(),
         )?;
 
         self.swapchain = Some(swapchain);
@@ -85,10 +85,12 @@ impl<'a> RenderTargetsBuilder<'a> {
     }
 
     pub unsafe fn create_image_views(mut self) -> VkResult<Self> {
-        self.swapchain_image_views = create_image_views(self.context.device(),
-                                                        self.swapchain_images(),
-                                                        self.swapchain_format())?
-            .pipe(Some);
+        self.swapchain_image_views = create_image_views(
+            self.context.device(),
+            self.swapchain_images(),
+            self.swapchain_format(),
+        )?
+        .pipe(Some);
         Ok(self)
     }
 
@@ -126,15 +128,20 @@ impl<'a> RenderTargetsBuilder<'a> {
             .dependencies(&dependencies);
 
         self.render_pass = unsafe {
-            self.context.device().create_render_pass(&render_pass_create_info, None)?
-        }.pipe(Some);
+            self.context
+                .device()
+                .create_render_pass(&render_pass_create_info, None)?
+        }
+        .pipe(Some);
 
         Ok(self)
     }
 
-     pub unsafe fn create_graphics_pipeline(mut self) -> Result<Self> {
+    pub unsafe fn create_graphics_pipeline(mut self) -> Result<Self> {
         let (pipeline_layout, pipeline) = create_graphics_pipeline(
-            self.context.device(), self.swapchain_extent(), self.render_pass(),
+            self.context.device(),
+            self.swapchain_extent(),
+            self.render_pass(),
         )?;
         self.pipeline_layout = Some(pipeline_layout);
         self.pipeline = Some(pipeline);
@@ -153,10 +160,14 @@ impl<'a> RenderTargetsBuilder<'a> {
                 .height(self.swapchain_extent().height)
                 .layers(1);
             let framebuffer = unsafe {
-                self.context.device().create_framebuffer(&create_info, None)
+                self.context
+                    .device()
+                    .create_framebuffer(&create_info, None)
                     .map_err(|err| {
                         for framebuffer in framebuffers.iter() {
-                            self.context.device().destroy_framebuffer(*framebuffer, None);
+                            self.context
+                                .device()
+                                .destroy_framebuffer(*framebuffer, None);
                         }
                         err
                     })?
@@ -221,7 +232,11 @@ impl RenderTargetsBuilder<'_> {
 
     fn destroy_pipeline_layout(&mut self) {
         if let Some(pipeline_layout) = self.pipeline_layout.take() {
-            unsafe { self.context.device().destroy_pipeline_layout(pipeline_layout, None) };
+            unsafe {
+                self.context
+                    .device()
+                    .destroy_pipeline_layout(pipeline_layout, None)
+            };
         }
     }
 
@@ -243,9 +258,7 @@ impl RenderTargetsBuilder<'_> {
     fn destroy_swapchain(&mut self) {
         if let Some(swapchain) = self.swapchain.take() {
             unsafe {
-                ash::khr::swapchain::Device::new(
-                    self.context.instance(), self.context.device()
-                )
+                ash::khr::swapchain::Device::new(self.context.instance(), self.context.device())
                     .destroy_swapchain(swapchain, None);
             }
         }

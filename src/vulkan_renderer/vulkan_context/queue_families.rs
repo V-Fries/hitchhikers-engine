@@ -1,6 +1,6 @@
-use ash::vk;
 use crate::utils::{GetAllUniques, PipeLine};
 use crate::vulkan_renderer::vulkan_context::errors::PhysicalDeviceIsNotSuitable;
+use ash::vk;
 
 #[derive(Clone, Copy)]
 pub struct QueueFamilies {
@@ -16,14 +16,17 @@ pub struct QueueFamiliesBuilder {
 
 impl QueueFamilies {
     pub fn as_vec_of_unique_indexes(&self) -> Vec<u32> {
-        [self.graphics_index, self.present_index].into_iter().get_all_uniques()
+        [self.graphics_index, self.present_index]
+            .into_iter()
+            .get_all_uniques()
     }
 }
 
 impl QueueFamiliesBuilder {
     pub fn build(&self, device: vk::PhysicalDevice) -> crate::utils::Result<QueueFamilies> {
-        let option_to_u32 = |option: Option<usize>, queue_name: &str|
-                             -> crate::utils::Result<u32, PhysicalDeviceIsNotSuitable> {
+        let option_to_u32 = |option: Option<usize>,
+                             queue_name: &str|
+         -> crate::utils::Result<u32, PhysicalDeviceIsNotSuitable> {
             option
                 .ok_or(PhysicalDeviceIsNotSuitable::new(
                     device,

@@ -1,15 +1,16 @@
-mod errors;
 mod builder;
+mod errors;
 mod queue_families;
 
-use ash::{prelude::VkResult, vk};
 use crate::utils::{PipeLine, Result};
-use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use ash::{prelude::VkResult, vk};
 use builder::VulkanContextBuilder;
+pub use builder::{create_device, PhysicalDeviceData, SwapchainBuilder};
 pub use queue_families::QueueFamilies;
-pub use builder::{SwapchainBuilder, PhysicalDeviceData, create_device};
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 pub struct VulkanContext {
+    #[allow(dead_code)]
     entry: ash::Entry,
     instance: ash::Instance,
 
@@ -24,8 +25,7 @@ pub struct VulkanContext {
 }
 
 impl VulkanContext {
-    pub fn new(window: &winit::window::Window)
-               -> Result<(Self, QueueFamilies, SwapchainBuilder)> {
+    pub fn new(window: &winit::window::Window) -> Result<(Self, QueueFamilies, SwapchainBuilder)> {
         let display_handle = window.display_handle()?.into();
         let window_handle = window.window_handle()?.into();
         let window_inner_size = window.inner_size();
@@ -50,9 +50,12 @@ impl VulkanContext {
     }
 
     pub fn device(&self) -> &ash::Device {
-        #[cfg(feature = "validation_layers")] {
-            assert!(!self.is_device_destroyed,
-                    "VulkanContext::device() was called after device destruction");
+        #[cfg(feature = "validation_layers")]
+        {
+            assert!(
+                !self.is_device_destroyed,
+                "VulkanContext::device() was called after device destruction"
+            );
         }
         &self.device
     }
@@ -60,9 +63,12 @@ impl VulkanContext {
     pub fn set_device(&mut self, device: ash::Device, physical_device: vk::PhysicalDevice) {
         // TODO maybe make a Device struct that holds both those values?
 
-        #[cfg(feature = "validation_layers")] {
-            assert!(self.is_device_destroyed,
-                    "VulkanContext::set_device() was called without device destruction");
+        #[cfg(feature = "validation_layers")]
+        {
+            assert!(
+                self.is_device_destroyed,
+                "VulkanContext::set_device() was called without device destruction"
+            );
         }
 
         self.physical_device = physical_device;
@@ -71,9 +77,12 @@ impl VulkanContext {
     }
 
     pub fn physical_device(&self) -> vk::PhysicalDevice {
-        #[cfg(feature = "validation_layers")] {
-            assert!(!self.is_device_destroyed,
-                    "VulkanContext::physical_device() was called after device destruction");
+        #[cfg(feature = "validation_layers")]
+        {
+            assert!(
+                !self.is_device_destroyed,
+                "VulkanContext::physical_device() was called after device destruction"
+            );
         }
 
         self.physical_device
@@ -92,9 +101,12 @@ impl VulkanContext {
     }
 
     pub unsafe fn destroy_device(&mut self) {
-        #[cfg(feature = "validation_layers")] {
-            assert!(!self.is_device_destroyed,
-                    "VulkanContext::destroy_device() was called after device destruction");
+        #[cfg(feature = "validation_layers")]
+        {
+            assert!(
+                !self.is_device_destroyed,
+                "VulkanContext::destroy_device() was called after device destruction"
+            );
         }
         self.device.destroy_device(None);
         self.is_device_destroyed = true;
@@ -104,7 +116,8 @@ impl VulkanContext {
         if !self.is_device_destroyed {
             self.destroy_device();
         }
-        #[cfg(feature = "validation_layers")] {
+        #[cfg(feature = "validation_layers")]
+        {
             ash::ext::debug_utils::Instance::new(&self.entry, &self.instance)
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }

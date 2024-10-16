@@ -1,8 +1,8 @@
-use ash::vk;
 use crate::utils::{PipeLine, Result};
-use crate::vulkan_renderer::{NB_OF_FRAMES_IN_FLIGHT, NB_OF_FRAMES_IN_FLIGHT_USIZE};
-use crate::vulkan_renderer::vulkan_interface::{Queues, SyncObjects, VulkanInterface};
 use crate::vulkan_renderer::vulkan_context::{QueueFamilies, VulkanContext};
+use crate::vulkan_renderer::vulkan_interface::{Queues, SyncObjects, VulkanInterface};
+use crate::vulkan_renderer::{NB_OF_FRAMES_IN_FLIGHT, NB_OF_FRAMES_IN_FLIGHT_USIZE};
+use ash::vk;
 
 pub struct VulkanInterfaceBuilder<'a> {
     context: &'a VulkanContext,
@@ -53,7 +53,8 @@ impl<'a> VulkanInterfaceBuilder<'a> {
             .queue_family_index(self.queue_families.graphics_index);
 
         self.command_pool = unsafe {
-            self.context.device()
+            self.context
+                .device()
                 .create_command_pool(&create_info, None)?
                 .pipe(Some)
         };
@@ -67,7 +68,8 @@ impl<'a> VulkanInterfaceBuilder<'a> {
             .command_buffer_count(NB_OF_FRAMES_IN_FLIGHT);
 
         self.command_buffers = Some(unsafe {
-            self.context.device()
+            self.context
+                .device()
                 .allocate_command_buffers(&alloc_info)?
                 .as_slice()
                 .try_into()?
@@ -75,10 +77,9 @@ impl<'a> VulkanInterfaceBuilder<'a> {
         Ok(self)
     }
 
-    pub unsafe fn create_sync_objects(mut self)
-                                      -> Result<Self> {
-        self.sync_objects = SyncObjects::new(self.context.device(), NB_OF_FRAMES_IN_FLIGHT)?
-            .pipe(Some);
+    pub unsafe fn create_sync_objects(mut self) -> Result<Self> {
+        self.sync_objects =
+            SyncObjects::new(self.context.device(), NB_OF_FRAMES_IN_FLIGHT)?.pipe(Some);
         Ok(self)
     }
 
@@ -97,7 +98,7 @@ impl Drop for VulkanInterfaceBuilder<'_> {
 impl VulkanInterfaceBuilder<'_> {
     fn destroy_sync_objects(&mut self) {
         let Some(sync_objects) = self.sync_objects.take() else {
-            return
+            return;
         };
 
         for semaphore in sync_objects.image_available_semaphores.into_iter() {
@@ -113,7 +114,11 @@ impl VulkanInterfaceBuilder<'_> {
 
     fn destroy_command_pool(&mut self) {
         if let Some(command_pool) = self.command_pool.take() {
-            unsafe { self.context.device().destroy_command_pool(command_pool, None) }
+            unsafe {
+                self.context
+                    .device()
+                    .destroy_command_pool(command_pool, None)
+            }
         }
     }
 }

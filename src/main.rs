@@ -1,7 +1,8 @@
-mod vulkan_renderer;
 mod app;
-mod utils;
 mod engine;
+mod utils;
+mod vertex;
+mod vulkan_renderer;
 
 use app::App;
 

@@ -21,7 +21,11 @@ impl ViewportStateCreateInfo<'_> {
             ..Default::default()
         };
 
-        Self { viewports, scissors, create_info }
+        Self {
+            viewports,
+            scissors,
+            create_info,
+        }
     }
 
     pub fn create_info(&self) -> &vk::PipelineViewportStateCreateInfo {
@@ -30,21 +34,19 @@ impl ViewportStateCreateInfo<'_> {
 }
 
 fn viewports(swapchain_extent: &vk::Extent2D) -> Box<[vk::Viewport]> {
-    vec![
-        vk::Viewport::default()
-            .x(0.)
-            .y(0.)
-            .width(swapchain_extent.width as f32)
-            .height(swapchain_extent.height as f32)
-            .min_depth(0.)
-            .max_depth(1.)
-    ].into_boxed_slice()
+    vec![vk::Viewport::default()
+        .x(0.)
+        .y(0.)
+        .width(swapchain_extent.width as f32)
+        .height(swapchain_extent.height as f32)
+        .min_depth(0.)
+        .max_depth(1.)]
+    .into_boxed_slice()
 }
 
 fn scissors(swapchain_extent: &vk::Extent2D) -> Box<[vk::Rect2D]> {
-    vec![
-        vk::Rect2D::default()
-            .offset(vk::Offset2D { x: 0, y: 0 })
-            .extent(*swapchain_extent)
-    ].into_boxed_slice()
+    vec![vk::Rect2D::default()
+        .offset(vk::Offset2D { x: 0, y: 0 })
+        .extent(*swapchain_extent)]
+    .into_boxed_slice()
 }

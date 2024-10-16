@@ -16,16 +16,12 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let engine = Engine::new(event_loop)
-            .expect("Failed to init Engine");
+        let engine = Engine::new(event_loop).expect("Failed to init Engine");
         engine.window().request_redraw();
         self.engine = Some(engine);
     }
 
-    fn window_event(&mut self,
-                    event_loop: &ActiveEventLoop,
-                    _id: WindowId,
-                    event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         let Some(engine) = &mut self.engine else {
             return;
         };
@@ -46,6 +42,11 @@ impl ApplicationHandler for App {
                 if let Err(err) = engine.handle_event(&event) {
                     eprintln!("Failed to handle event ({event:?}): {err}");
                     self.exit(event_loop);
+
+                    #[allow(dead_code)]
+                    // This is here to remove the warning that says the return is useless
+                    // I want to keep the return because I might add more code after the match
+                    // later
                     return;
                 }
             }

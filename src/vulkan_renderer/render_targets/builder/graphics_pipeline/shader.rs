@@ -1,8 +1,8 @@
+use super::super::super::errors::{FailedToReadShaderCode, ShaderCodeBadLen};
+use crate::utils::{PipeLine, Result};
+use ash::vk;
 use std::fs::File;
 use std::io::Read;
-use ash::vk;
-use crate::utils::{PipeLine, Result};
-use super::super::super::errors::{FailedToReadShaderCode, ShaderCodeBadLen};
 
 const VERT_SHADER_PATH: &str = "./shaders/build/shader.vert.spv";
 const FRAG_SHADER_PATH: &str = "./shaders/build/shader.frag.spv";
@@ -27,11 +27,10 @@ impl<'a> ShaderStageCreateInfos<'a> {
         let vertex_shader_module = ShaderModule::new(device, VERT_SHADER_PATH)?;
         let fragment_shader_module = ShaderModule::new(device, FRAG_SHADER_PATH)?;
 
-        let vertex_shader_stage_create_info =
-            vk::PipelineShaderStageCreateInfo::default()
-                .stage(vk::ShaderStageFlags::VERTEX)
-                .module(vertex_shader_module.module())
-                .name(c"main");
+        let vertex_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::default()
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .module(vertex_shader_module.module())
+            .name(c"main");
         let fragment_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(fragment_shader_module.module())
@@ -42,7 +41,11 @@ impl<'a> ShaderStageCreateInfos<'a> {
             fragment_shader_stage_create_info,
         ];
 
-        Ok(Self { create_infos, vertex_shader_module, fragment_shader_module })
+        Ok(Self {
+            create_infos,
+            vertex_shader_module,
+            fragment_shader_module,
+        })
     }
 
     pub fn create_infos(&self) -> &[vk::PipelineShaderStageCreateInfo] {
@@ -50,11 +53,8 @@ impl<'a> ShaderStageCreateInfos<'a> {
     }
 }
 
-
 impl<'a> ShaderModule<'a> {
-    fn new(device: &'a ash::Device,
-           shader_binary_path: &'static str)
-           -> Result<Self> {
+    fn new(device: &'a ash::Device, shader_binary_path: &'static str) -> Result<Self> {
         ShaderCode::new(shader_binary_path)?
             .pipe(|code| {
                 Self::shader_module_create_info(&code)
@@ -69,11 +69,9 @@ impl<'a> ShaderModule<'a> {
     }
 
     fn shader_module_create_info(code: &ShaderCode) -> vk::ShaderModuleCreateInfo {
-        vk::ShaderModuleCreateInfo::default()
-            .code(code.as_u32_slice())
+        vk::ShaderModuleCreateInfo::default().code(code.as_u32_slice())
     }
 }
-
 
 impl Drop for ShaderModule<'_> {
     fn drop(&mut self) {
@@ -97,11 +95,6 @@ impl ShaderCode {
     }
 
     fn as_u32_slice(&self) -> &[u32] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self.0.as_ptr() as *const u32,
-                self.0.len() / 4,
-            )
-        }
+        unsafe { std::slice::from_raw_parts(self.0.as_ptr() as *const u32, self.0.len() / 4) }
     }
 }

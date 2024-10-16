@@ -1,20 +1,20 @@
+mod device;
+mod instance;
 #[cfg(feature = "validation_layers")]
 mod validation_layers;
-mod instance;
-mod device;
 
 pub use device::SwapchainBuilder;
 
+use super::VulkanContext;
 use crate::utils::{PipeLine, Result};
+use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
+use ash::vk;
+pub use device::create_device;
+pub use device::PhysicalDeviceData;
+use instance::create_instance;
 #[cfg(feature = "validation_layers")]
 use validation_layers::{check_validation_layers, create_debug_messenger};
-pub use device::create_device;
-use instance::create_instance;
-use ash::vk;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-pub use device::PhysicalDeviceData;
-use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
-use super::VulkanContext;
 
 #[derive(Default)]
 pub struct VulkanContextBuilder {
@@ -52,37 +52,35 @@ impl VulkanContextBuilder {
         )
     }
 
-
     pub fn create_entry(mut self) -> Result<Self, ash::LoadingError> {
-        self.entry = unsafe { ash::Entry::load()? }
-            .pipe(Some);
+        self.entry = unsafe { ash::Entry::load()? }.pipe(Some);
         Ok(self)
     }
 
-    pub unsafe fn create_instance(mut self,
-                                  display_handle: RawDisplayHandle)
-                                  -> Result<Self> {
-        #[cfg(feature = "validation_layers")] {
+    pub unsafe fn create_instance(mut self, display_handle: RawDisplayHandle) -> Result<Self> {
+        #[cfg(feature = "validation_layers")]
+        {
             check_validation_layers(self.entry())?;
         }
 
-        self.instance = create_instance(self.entry(), display_handle)?
-            .pipe(Some);
+        self.instance = create_instance(self.entry(), display_handle)?.pipe(Some);
 
-        #[cfg(feature = "validation_layers")] {
-            self.debug_messenger = create_debug_messenger(self.entry(), self.instance())?
-                .pipe(Some);
+        #[cfg(feature = "validation_layers")]
+        {
+            self.debug_messenger =
+                create_debug_messenger(self.entry(), self.instance())?.pipe(Some);
         }
 
         Ok(self)
     }
 
-    pub unsafe fn create_surface(mut self,
-                                 display_handle: RawDisplayHandle,
-                                 window_handle: RawWindowHandle)
-                                 -> Result<Self> {
-        self.surface_instance = ash::khr::surface::Instance::new(self.entry(), self.instance())
-            .pipe(Some);
+    pub unsafe fn create_surface(
+        mut self,
+        display_handle: RawDisplayHandle,
+        window_handle: RawWindowHandle,
+    ) -> Result<Self> {
+        self.surface_instance =
+            ash::khr::surface::Instance::new(self.entry(), self.instance()).pipe(Some);
         self.surface = unsafe {
             ash_window::create_surface(
                 self.entry(),
@@ -91,25 +89,27 @@ impl VulkanContextBuilder {
                 window_handle,
                 None,
             )?
-                .pipe(Some)
+            .pipe(Some)
         };
         Ok(self)
     }
 
-    pub unsafe fn create_device(mut self,
-                                window_inner_size: winit::dpi::PhysicalSize<u32>)
-                                -> Result<Self> {
+    pub unsafe fn create_device(
+        mut self,
+        window_inner_size: winit::dpi::PhysicalSize<u32>,
+    ) -> Result<Self> {
         self.physical_device_data = PhysicalDeviceData::new(
-            self.surface_instance(), self.instance(), self.surface(), window_inner_size,
+            self.surface_instance(),
+            self.instance(),
+            self.surface(),
+            window_inner_size,
         )?
-            .pipe(Some);
+        .pipe(Some);
 
-        self.device = create_device(self.instance(), self.physical_device())?
-            .pipe(Some);
+        self.device = create_device(self.instance(), self.physical_device())?.pipe(Some);
 
         Ok(self)
     }
-
 
     unsafe fn entry(&self) -> &ash::Entry {
         self.entry.as_ref().unwrap()
@@ -135,7 +135,8 @@ impl VulkanContextBuilder {
 impl Drop for VulkanContextBuilder {
     fn drop(&mut self) {
         self.destroy_device();
-        #[cfg(feature = "validation_layers")] {
+        #[cfg(feature = "validation_layers")]
+        {
             self.destroy_debug_messenger();
         }
         self.destroy_surface();

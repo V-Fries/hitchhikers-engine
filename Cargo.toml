@@ -3,13 +3,18 @@ name = "game_engine"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = ["crates/linear_algebra"]
+
 [features]
 validation_layers = []
 
 [dependencies]
+linear_algebra = { path = "./crates/linear_algebra" }
+
 # Vulkan wrapper
 ash = "0.38.0"
 
 # Window
-winit = "0.30.3"
+winit = "0.30.5"
 ash-window = "0.13.0"

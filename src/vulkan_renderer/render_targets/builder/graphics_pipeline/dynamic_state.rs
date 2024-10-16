@@ -9,10 +9,8 @@ pub struct DynamicStateCreateInfo<'a> {
 
 impl DynamicStateCreateInfo<'_> {
     pub fn new() -> Self {
-        let dynamic_states = vec![
-            vk::DynamicState::VIEWPORT,
-            vk::DynamicState::SCISSOR,
-        ].into_boxed_slice();
+        let dynamic_states =
+            vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR].into_boxed_slice();
 
         let create_info = vk::PipelineDynamicStateCreateInfo {
             dynamic_state_count: dynamic_states.len() as u32,
@@ -20,7 +18,10 @@ impl DynamicStateCreateInfo<'_> {
             ..Default::default()
         };
 
-        Self { dynamic_states, create_info }
+        Self {
+            dynamic_states,
+            create_info,
+        }
     }
 
     pub fn create_info(&self) -> &vk::PipelineDynamicStateCreateInfo {

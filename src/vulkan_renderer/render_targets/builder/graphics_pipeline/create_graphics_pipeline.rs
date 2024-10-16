@@ -1,23 +1,28 @@
-use ash::vk;
-use crate::utils::Result;
 use super::super::super::errors::FailedToCreatePipeline;
-use super::pipeline_layout::create_pipeline_layout;
 use super::color_blending::ColorBlendStateCreateInfo;
 use super::dynamic_state::DynamicStateCreateInfo;
 use super::input_assembly::input_assembly_state_create_info;
 use super::multisampling::multisample_state_create_info;
+use super::pipeline_layout::create_pipeline_layout;
 use super::rasterizer::rasterizer_state_create_info;
 use super::shader::ShaderStageCreateInfos;
 use super::vertex_input::vertex_input_state_create_info;
 use super::viewport::ViewportStateCreateInfo;
+use crate::utils::Result;
+use crate::vertex::Vertex;
+use ash::vk;
 
-pub fn create_graphics_pipeline(device: &ash::Device,
-                                swapchain_extent: &vk::Extent2D,
-                                render_pass: vk::RenderPass)
-                                -> Result<(vk::PipelineLayout, vk::Pipeline)> {
+pub fn create_graphics_pipeline(
+    device: &ash::Device,
+    swapchain_extent: &vk::Extent2D,
+    render_pass: vk::RenderPass,
+) -> Result<(vk::PipelineLayout, vk::Pipeline)> {
     // TODO refactor
     let shader_stage_create_infos = ShaderStageCreateInfos::new(device)?;
-    let vertex_input_state_create_info = vertex_input_state_create_info();
+    let binding_descriptions = [Vertex::get_binding_description()];
+    let attributes_description = Vertex::get_attributes_descriptions();
+    let vertex_input_state_create_info =
+        vertex_input_state_create_info(&binding_descriptions, &attributes_description);
     let input_assembly_state_create_info = input_assembly_state_create_info();
     let viewport_state_create_info = ViewportStateCreateInfo::new(swapchain_extent);
     let rasterizer_state_create_info = rasterizer_state_create_info();
@@ -40,7 +45,8 @@ pub fn create_graphics_pipeline(device: &ash::Device,
         .subpass(0)];
 
     let graphics_pipeline = unsafe {
-        device.create_graphics_pipelines(vk::PipelineCache::null(), &create_infos, None)
+        device
+            .create_graphics_pipelines(vk::PipelineCache::null(), &create_infos, None)
             .map_err(|err| {
                 device.destroy_pipeline_layout(pipeline_layout, None);
                 FailedToCreatePipeline::new(err)

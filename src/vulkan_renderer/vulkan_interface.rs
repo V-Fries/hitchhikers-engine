@@ -55,6 +55,17 @@ impl VulkanInterface {
         self.queue_families
     }
 
+    pub fn command_pool(&self) -> vk::CommandPool {
+        #[cfg(feature = "validation_layers")]
+        {
+            assert!(
+                !self.is_destroyed,
+                "VulkanInterface::command_pool() was called after interface destruction"
+            );
+        }
+        self.command_pool
+    }
+
     pub fn command_buffers(&self) -> &[vk::CommandBuffer; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
         #[cfg(feature = "validation_layers")]
         {

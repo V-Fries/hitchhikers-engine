@@ -1,11 +1,12 @@
+mod buffer;
 mod builder;
 mod render_targets;
 mod vulkan_context;
 mod vulkan_interface;
 
 use crate::utils::{PipeLine, Result};
-use crate::vertex::{self, Vertex};
 use ash::{prelude::VkResult, vk};
+use buffer::Buffer;
 use builder::VulkanRendererBuilder;
 use render_targets::RenderTargets;
 use vulkan_context::{create_device, PhysicalDeviceData, SwapchainBuilder, VulkanContext};
@@ -18,10 +19,7 @@ pub struct VulkanRenderer {
     context: VulkanContext,
     interface: VulkanInterface,
     render_targets: RenderTargets,
-    // TODO remove this
-    vertices: Vec<Vertex>,
-    vertex_buffer: Option<vk::Buffer>,
-    vertex_buffer_memory: Option<vk::DeviceMemory>,
+    vertex_buffer: Buffer,
 
     current_frame: usize,
 }
@@ -35,103 +33,13 @@ enum NextImage {
 
 impl VulkanRenderer {
     pub fn new(window: &winit::window::Window) -> Result<Self> {
-        unsafe {
-            // TODO don't store in variable return directly
-            let mut renderer = VulkanRendererBuilder::default()
-                .create_context(window)?
-                .create_interface()?
-                .create_render_targets()?
-                .build();
-
-            // TODO delete everything below this
-            let buffer_create_info = vk::BufferCreateInfo::default()
-                .size((size_of_val(&renderer.vertices[0]) * renderer.vertices.len()) as u64)
-                .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            renderer.vertex_buffer = renderer
-                .context
-                .device()
-                .create_buffer(&buffer_create_info, None)?
-                .pipe(Some);
-            let memory_requirements = renderer
-                .context
-                .device()
-                .get_buffer_memory_requirements(renderer.vertex_buffer());
-            let alloc_info = vk::MemoryAllocateInfo::default()
-                .allocation_size(memory_requirements.size)
-                .memory_type_index(
-                    renderer
-                        .find_memory_type(
-                            memory_requirements.memory_type_bits,
-                            vk::MemoryPropertyFlags::HOST_VISIBLE
-                                | vk::MemoryPropertyFlags::HOST_COHERENT,
-                        )
-                        .unwrap(),
-                );
-            renderer.vertex_buffer_memory = renderer
-                .context
-                .device()
-                .allocate_memory(&alloc_info, None)
-                .unwrap()
-                .pipe(Some);
-            renderer
-                .context
-                .device()
-                .bind_buffer_memory(
-                    renderer.vertex_buffer.unwrap(),
-                    renderer.vertex_buffer_memory.unwrap(),
-                    0,
-                )
-                .unwrap();
-
-            let vertex_buffer_data = renderer
-                .context
-                .device()
-                .map_memory(
-                    renderer.vertex_buffer_memory.unwrap(),
-                    0,
-                    buffer_create_info.size,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .unwrap();
-            std::ptr::copy_nonoverlapping(
-                renderer.vertices.as_ptr(),
-                vertex_buffer_data as *mut vertex::Vertex,
-                buffer_create_info.size as usize,
-            );
-            renderer
-                .context
-                .device()
-                .unmap_memory(renderer.vertex_buffer_memory.unwrap());
-            Ok(renderer)
-        }
-    }
-
-    // TODO delete this method
-    pub fn vertex_buffer(&self) -> vk::Buffer {
-        self.vertex_buffer.unwrap()
-    }
-
-    pub fn find_memory_type(
-        &self,
-        memory_type_filter: u32,
-        properties: vk::MemoryPropertyFlags,
-    ) -> Result<u32, ()> {
-        let memory_priority = unsafe {
-            self.context
-                .instance()
-                .get_physical_device_memory_properties(self.context.physical_device())
-        };
-
-        for (i, memory_type) in memory_priority.memory_types.iter().enumerate() {
-            if memory_type_filter & (1 << i) != 0
-                && memory_type.property_flags & properties == properties
-            {
-                return Ok(i as u32);
-            }
-        }
-        // TODO make a proper error
-        Err(())
+        VulkanRendererBuilder::default()
+            .create_context(window)?
+            .create_interface()?
+            .create_render_targets()?
+            .create_vertex_buffer()?
+            .build()
+            .pipe(Ok)
     }
 
     pub fn render_frame(&mut self, window: &winit::window::Window) -> Result<()> {
@@ -250,7 +158,7 @@ impl VulkanRenderer {
             );
         }
 
-        let vertex_buffers = [self.vertex_buffer()];
+        let vertex_buffers = [self.vertex_buffer.buffer()];
         let offsets = [0];
         unsafe {
             self.context.device().cmd_bind_vertex_buffers(
@@ -278,9 +186,7 @@ impl VulkanRenderer {
             self.context
                 .device()
                 .cmd_set_scissor(command_buffer, 0, &scissors);
-            self.context
-                .device()
-                .cmd_draw(command_buffer, self.vertices.len() as u32, 1, 0, 0);
+            self.context.device().cmd_draw(command_buffer, 3, 1, 0, 0); // TODO remove the hardcoded 3
             self.context.device().cmd_end_render_pass(command_buffer);
             self.context.device().end_command_buffer(command_buffer)?;
         }
@@ -414,14 +320,7 @@ impl VulkanRenderer {
                        Attempting to clean resources anyway..."
             );
         }
-        // TODO delete these lines
-        self.context
-            .device()
-            .destroy_buffer(self.vertex_buffer(), None);
-        self.context
-            .device()
-            .free_memory(self.vertex_buffer_memory.unwrap(), None);
-
+        self.vertex_buffer.destroy(self.context.device());
         self.interface.destroy(&self.context);
         self.render_targets.destroy(&self.context);
         self.context.destroy();

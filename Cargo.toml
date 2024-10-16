@@ -16,5 +16,5 @@ linear_algebra = { path = "./crates/linear_algebra" }
 ash = "0.38.0"
 
 # Window
-winit = "0.30.3"
+winit = "0.30.5"
 ash-window = "0.13.0"

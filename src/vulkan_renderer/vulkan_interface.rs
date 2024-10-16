@@ -88,26 +88,23 @@ impl VulkanInterface {
         &self.sync_objects
     }
 
-    pub unsafe fn destroy(&mut self, context: &VulkanContext) {
+    pub unsafe fn destroy(&mut self, device: &ash::Device) {
+        // If an error occurs during swapchain recreating this function might be called twice
         if self.is_destroyed {
             return;
         }
         self.is_destroyed = true;
 
         for semaphore in self.sync_objects.image_available_semaphores.into_iter() {
-            unsafe { context.device().destroy_semaphore(semaphore, None) }
+            device.destroy_semaphore(semaphore, None);
         }
         for semaphore in self.sync_objects.render_finished_semaphores.into_iter() {
-            unsafe { context.device().destroy_semaphore(semaphore, None) }
+            device.destroy_semaphore(semaphore, None);
         }
         for fence in self.sync_objects.in_flight_fences.into_iter() {
-            unsafe { context.device().destroy_fence(fence, None) }
+            device.destroy_fence(fence, None);
         }
 
-        unsafe {
-            context
-                .device()
-                .destroy_command_pool(self.command_pool, None)
-        }
+        device.destroy_command_pool(self.command_pool, None);
     }
 }

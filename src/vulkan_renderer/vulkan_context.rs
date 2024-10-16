@@ -113,6 +113,8 @@ impl VulkanContext {
     }
 
     pub unsafe fn destroy(&mut self) {
+        // TODO add is_destroyed member and do debug_assertions with it (Same for other structs)
+
         if !self.is_device_destroyed {
             self.destroy_device();
         }

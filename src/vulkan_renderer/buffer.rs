@@ -2,7 +2,10 @@ mod errors;
 
 use std::{ffi::c_void, ptr::copy_nonoverlapping};
 
-use crate::{defer, utils::{Defer, Result, ScopeGuard}};
+use crate::{
+    defer,
+    utils::{Defer, Result, ScopeGuard},
+};
 use ash::vk;
 use errors::FailedToFindMemoryTypeIndex;
 

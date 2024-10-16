@@ -10,7 +10,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
-pub const ENGINE_NAME: &str = "HitchHiker's Engine";
+pub const ENGINE_NAME: &str = "Hitchhiker's Engine";
 pub const ENGINE_NAME_CSTR: &CStr = const_str_to_cstr!(ENGINE_NAME);
 
 pub const ENGINE_VERSION: u32 = vk::make_api_version(0, 0, 0, 0);

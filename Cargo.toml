@@ -1,5 +1,5 @@
 [package]
-name = "game_engine"
+name = "hitchhikers-engine"
 version = "0.1.0"
 edition = "2021"
 

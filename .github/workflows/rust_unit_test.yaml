@@ -27,3 +27,8 @@ jobs:
       - name: Run test
         run: cargo test
 
+      - name: Run test with validation layers
+        run: cargo test --features validation_layers
+
+      - name: Run test with --release
+        run: cargo test --release

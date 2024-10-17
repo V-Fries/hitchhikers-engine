@@ -34,57 +34,42 @@ impl VulkanInterface {
     }
 
     pub fn queues(&self) -> &Queues {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::queues() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::queues() was called after interface destruction"
+        );
         &self.queues
     }
 
     pub fn queue_families(&self) -> QueueFamilies {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::queue_families() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::queue_families() was called after interface destruction"
+        );
         self.queue_families
     }
 
     pub fn command_pool(&self) -> vk::CommandPool {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::command_pool() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::command_pool() was called after interface destruction"
+        );
         self.command_pool
     }
 
     pub fn command_buffers(&self) -> &[vk::CommandBuffer; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::command_buffers() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::command_buffers() was called after interface destruction"
+        );
         &self.command_buffers
     }
 
     pub fn sync_objects(&self) -> &SyncObjects {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::sync_objects() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::sync_objects() was called after interface destruction"
+        );
         &self.sync_objects
     }
 

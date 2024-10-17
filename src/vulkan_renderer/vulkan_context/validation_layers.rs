@@ -1,7 +1,7 @@
 use crate::utils::Result;
 use ash::vk;
 
-use super::super::errors::ValidationLayerNotFound;
+use super::errors::ValidationLayerNotFound;
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
 

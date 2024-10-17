@@ -5,6 +5,11 @@ pub trait PipeLine: Sized {
     {
         f(self)
     }
+
+    #[allow(dead_code)]
+    unsafe fn pipe_unsafe<T>(self, f: unsafe fn(Self) -> T) -> T {
+        f(self)
+    }
 }
 
 impl<T> PipeLine for T {}

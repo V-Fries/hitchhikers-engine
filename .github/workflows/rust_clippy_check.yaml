@@ -27,3 +27,10 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy -- -D warnings
+
+      - name: Run clippy with validation layers
+        run: cargo clippy --features validation_layers -- -D warnings
+
+      - name: Run clippy with --release
+        # Used to check if the code still compiles without debug_assertions
+        run: cargo clippy --release -- -D warnings

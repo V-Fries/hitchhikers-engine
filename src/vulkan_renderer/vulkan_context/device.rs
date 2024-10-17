@@ -13,7 +13,7 @@ pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
     vk::KHR_SWAPCHAIN_NAME.as_ptr(),
 ];
 
-pub fn create_device(
+pub unsafe fn create_device(
     instance: &ash::Instance,
     device_data: &PhysicalDeviceData,
 ) -> Result<ash::Device> {

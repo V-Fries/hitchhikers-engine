@@ -118,11 +118,11 @@ impl Buffer {
         #[cfg(debug_assertions)]
         {
             debug_assert!(!self.is_destroyed);
+            debug_assert!(self.size > dst_offset);
+            debug_assert!(
+                ((src.len() * size_of_val(&src[0])) as vk::DeviceSize) <= self.size - dst_offset
+            );
         }
-        debug_assert!(self.size > dst_offset);
-        debug_assert!(
-            ((src.len() * size_of_val(&src[0])) as vk::DeviceSize) <= self.size - dst_offset
-        );
 
         let ptr = device.map_memory(
             self.memory,
@@ -153,11 +153,11 @@ impl Buffer {
         #[cfg(debug_assertions)]
         {
             debug_assert!(!self.is_destroyed);
+            debug_assert!(self.size >= dst_offset);
+            debug_assert!(src.size >= src_offset);
+            debug_assert!(size_to_copy <= src.size - src_offset);
+            debug_assert!(size_to_copy <= self.size - dst_offset);
         }
-        debug_assert!(self.size >= dst_offset);
-        debug_assert!(src.size >= src_offset);
-        debug_assert!(size_to_copy <= src.size - src_offset);
-        debug_assert!(size_to_copy <= self.size - dst_offset);
 
         let command_buffer = device.allocate_command_buffers(
             &vk::CommandBufferAllocateInfo::default()

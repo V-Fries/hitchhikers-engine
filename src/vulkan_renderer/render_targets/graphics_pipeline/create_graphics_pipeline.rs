@@ -1,4 +1,4 @@
-use super::super::super::errors::FailedToCreatePipeline;
+use super::super::errors::FailedToCreatePipeline;
 use super::color_blending::ColorBlendStateCreateInfo;
 use super::dynamic_state::DynamicStateCreateInfo;
 use super::input_assembly::input_assembly_state_create_info;
@@ -12,7 +12,7 @@ use crate::utils::Result;
 use crate::vertex::Vertex;
 use ash::vk;
 
-pub fn create_graphics_pipeline(
+pub unsafe fn create_graphics_pipeline(
     device: &ash::Device,
     swapchain_extent: &vk::Extent2D,
     render_pass: vk::RenderPass,

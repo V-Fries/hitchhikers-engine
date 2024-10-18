@@ -20,7 +20,6 @@ error_struct!(
     reason
 );
 
-#[cfg(feature = "validation_layers")]
 error_struct!(ValidationLayerNotFound {
     validation_layer_name: &'static CStr,
 }, "Could not find validation layer: {:?}", validation_layer_name);

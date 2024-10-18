@@ -10,3 +10,5 @@ shaders/build/
 # IDE
 .vscode
 .idea
+
+test.sh

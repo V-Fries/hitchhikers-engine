@@ -85,3 +85,18 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::cell::Cell;
+
+    #[test]
+    fn defer() {
+        let nb = Cell::new(0);
+        {
+            defer!(nb.set(1));
+            assert_eq!(nb.get(), 0);
+        }
+        assert_eq!(nb.get(), 1);
+    }
+}

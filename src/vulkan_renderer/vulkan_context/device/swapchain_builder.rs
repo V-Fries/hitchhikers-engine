@@ -53,7 +53,7 @@ impl SwapchainBuilder {
         })
     }
 
-    pub fn build(
+    pub unsafe fn build(
         &self,
         instance: &ash::Instance,
         surface: vk::SurfaceKHR,

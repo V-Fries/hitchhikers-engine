@@ -1,13 +1,13 @@
 mod buffer;
-mod builder;
+mod create_vertex_buffer;
 mod render_targets;
 mod vulkan_context;
 mod vulkan_interface;
 
-use crate::utils::{PipeLine, Result};
+use crate::utils::{Defer, Result, ScopeGuard};
 use ash::{prelude::VkResult, vk};
 use buffer::Buffer;
-use builder::VulkanRendererBuilder;
+use create_vertex_buffer::create_vertex_buffer;
 use render_targets::RenderTargets;
 use vulkan_context::{create_device, PhysicalDeviceData, SwapchainBuilder, VulkanContext};
 use vulkan_interface::VulkanInterface;
@@ -33,13 +33,25 @@ enum NextImage {
 
 impl VulkanRenderer {
     pub fn new(window: &winit::window::Window) -> Result<Self> {
-        VulkanRendererBuilder::default()
-            .create_context(window)?
-            .create_interface()?
-            .create_render_targets()?
-            .create_vertex_buffer()?
-            .build()
-            .pipe(Ok)
+        let (context, queue_families, swapchain_builder) = VulkanContext::new(window)?;
+        let context = context.defer(|mut context| unsafe { context.destroy() });
+
+        let interface = unsafe { VulkanInterface::new(&context, queue_families)? }
+            .defer(|mut interface| unsafe { interface.destroy(context.device()) });
+
+        let render_targets = unsafe { RenderTargets::new(&context, swapchain_builder)? }
+            .defer(|mut render_targets| unsafe { render_targets.destroy(&context) });
+
+        let vertex_buffer = unsafe { create_vertex_buffer(&context, &interface)? }
+            .defer(|mut vertex_buffer| unsafe { vertex_buffer.destroy(context.device()) });
+
+        Ok(Self {
+            interface: ScopeGuard::into_inner(interface),
+            render_targets: ScopeGuard::into_inner(render_targets),
+            vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
+            context: ScopeGuard::into_inner(context),
+            current_frame: 0,
+        })
     }
 
     pub fn render_frame(&mut self, window: &winit::window::Window) -> Result<()> {
@@ -293,7 +305,7 @@ impl VulkanRenderer {
             return Ok(swapchain_builder);
         }
 
-        self.interface.destroy(&self.context);
+        self.interface.destroy(self.context.device());
         self.context.destroy_device();
 
         let physical_device_data = PhysicalDeviceData::new(
@@ -321,7 +333,7 @@ impl VulkanRenderer {
             );
         }
         self.vertex_buffer.destroy(self.context.device());
-        self.interface.destroy(&self.context);
+        self.interface.destroy(self.context.device());
         self.render_targets.destroy(&self.context);
         self.context.destroy();
     }

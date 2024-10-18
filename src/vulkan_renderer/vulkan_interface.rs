@@ -1,12 +1,15 @@
-mod builder;
+mod create_command_buffers;
+mod create_command_pool;
 mod queue;
 mod sync_objects;
 
 use super::vulkan_context::{QueueFamilies, VulkanContext};
-use crate::utils::{PipeLine, Result};
+use super::NB_OF_FRAMES_IN_FLIGHT;
+use crate::utils::{Defer, Result, ScopeGuard};
 use crate::vulkan_renderer::NB_OF_FRAMES_IN_FLIGHT_USIZE;
 use ash::vk;
-use builder::VulkanInterfaceBuilder;
+use create_command_buffers::create_command_buffers;
+use create_command_pool::create_command_pool;
 use queue::Queues;
 pub use sync_objects::SyncObjects;
 
@@ -14,7 +17,7 @@ pub struct VulkanInterface {
     is_destroyed: bool,
 
     queues: Queues,
-    queue_families: QueueFamilies, // TODO check if I really need to store this and update excalidraw
+    queue_families: QueueFamilies,
 
     command_pool: vk::CommandPool,
     command_buffers: [vk::CommandBuffer; NB_OF_FRAMES_IN_FLIGHT_USIZE],
@@ -24,90 +27,72 @@ pub struct VulkanInterface {
 
 impl VulkanInterface {
     pub unsafe fn new(context: &VulkanContext, queue_families: QueueFamilies) -> Result<Self> {
-        VulkanInterfaceBuilder::new(context, queue_families)
-            .create_queues()
-            .create_command_pool()?
-            .create_command_buffers()?
-            .create_sync_objects()?
-            .build()
-            .pipe(Ok)
+        let queues = Queues::new(context, queue_families);
+        let command_pool = create_command_pool(context.device(), queue_families.graphics_index)?
+            .defer(|command_pool| context.device().destroy_command_pool(command_pool, None));
+        let command_buffers = create_command_buffers(context.device(), *command_pool)?;
+        let sync_objects = SyncObjects::new(context.device(), NB_OF_FRAMES_IN_FLIGHT)?
+            .defer(|sync_objects| sync_objects.destroy(context.device()));
+
+        Ok(VulkanInterface {
+            sync_objects: ScopeGuard::into_inner(sync_objects),
+            command_buffers,
+            command_pool: ScopeGuard::into_inner(command_pool),
+            queue_families,
+            queues,
+            is_destroyed: false,
+        })
     }
 
     pub fn queues(&self) -> &Queues {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::queues() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::queues() was called after interface destruction"
+        );
         &self.queues
     }
 
     pub fn queue_families(&self) -> QueueFamilies {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::queue_families() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::queue_families() was called after interface destruction"
+        );
         self.queue_families
     }
 
     pub fn command_pool(&self) -> vk::CommandPool {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::command_pool() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::command_pool() was called after interface destruction"
+        );
         self.command_pool
     }
 
     pub fn command_buffers(&self) -> &[vk::CommandBuffer; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::command_buffers() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::command_buffers() was called after interface destruction"
+        );
         &self.command_buffers
     }
 
     pub fn sync_objects(&self) -> &SyncObjects {
-        #[cfg(feature = "validation_layers")]
-        {
-            assert!(
-                !self.is_destroyed,
-                "VulkanInterface::sync_objects() was called after interface destruction"
-            );
-        }
+        debug_assert!(
+            !self.is_destroyed,
+            "VulkanInterface::sync_objects() was called after interface destruction"
+        );
         &self.sync_objects
     }
 
-    pub unsafe fn destroy(&mut self, context: &VulkanContext) {
+    pub unsafe fn destroy(&mut self, device: &ash::Device) {
+        // If an error occurs during swapchain recreating this function might be called twice
         if self.is_destroyed {
             return;
         }
         self.is_destroyed = true;
 
-        for semaphore in self.sync_objects.image_available_semaphores.into_iter() {
-            unsafe { context.device().destroy_semaphore(semaphore, None) }
-        }
-        for semaphore in self.sync_objects.render_finished_semaphores.into_iter() {
-            unsafe { context.device().destroy_semaphore(semaphore, None) }
-        }
-        for fence in self.sync_objects.in_flight_fences.into_iter() {
-            unsafe { context.device().destroy_fence(fence, None) }
-        }
+        self.sync_objects.destroy(device);
 
-        unsafe {
-            context
-                .device()
-                .destroy_command_pool(self.command_pool, None)
-        }
+        device.destroy_command_pool(self.command_pool, None);
     }
 }

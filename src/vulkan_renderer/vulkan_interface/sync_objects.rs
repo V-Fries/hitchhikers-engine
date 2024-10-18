@@ -20,4 +20,16 @@ impl SyncObjects {
             .build()?
             .pipe(Ok)
     }
+
+    pub unsafe fn destroy(&self, device: &ash::Device) {
+        for semaphore in self.image_available_semaphores.into_iter() {
+            device.destroy_semaphore(semaphore, None);
+        }
+        for semaphore in self.render_finished_semaphores.into_iter() {
+            device.destroy_semaphore(semaphore, None);
+        }
+        for fence in self.in_flight_fences.into_iter() {
+            device.destroy_fence(fence, None);
+        }
+    }
 }

@@ -8,7 +8,7 @@ use ash::vk;
 
 use super::super::device::REQUIRED_EXTENSIONS;
 use crate::utils::Result;
-use crate::vulkan_renderer::vulkan_context::builder::device::swapchain_builder::SwapchainBuilder;
+use crate::vulkan_renderer::vulkan_context::device::swapchain_builder::SwapchainBuilder;
 use crate::vulkan_renderer::vulkan_context::queue_families::{QueueFamilies, QueueFamiliesBuilder};
 
 type ExtensionName = String;

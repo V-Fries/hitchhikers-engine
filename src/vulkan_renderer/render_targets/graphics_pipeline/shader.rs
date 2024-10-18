@@ -1,4 +1,4 @@
-use super::super::super::errors::{FailedToReadShaderCode, ShaderCodeBadLen};
+use super::super::errors::{FailedToReadShaderCode, ShaderCodeBadLen};
 use crate::utils::{PipeLine, Result};
 use ash::vk;
 use std::fs::File;

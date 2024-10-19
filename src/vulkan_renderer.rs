@@ -1,13 +1,12 @@
 mod buffer;
-mod create_vertex_buffer;
+mod memory;
 mod render_targets;
 mod vulkan_context;
 mod vulkan_interface;
 
 use crate::utils::{Defer, Result, ScopeGuard};
 use ash::{prelude::VkResult, vk};
-use buffer::Buffer;
-use create_vertex_buffer::create_vertex_buffer;
+use memory::{Memory, INDICES};
 use render_targets::RenderTargets;
 use vulkan_context::{create_device, PhysicalDeviceData, SwapchainBuilder, VulkanContext};
 use vulkan_interface::VulkanInterface;
@@ -19,7 +18,7 @@ pub struct VulkanRenderer {
     context: VulkanContext,
     interface: VulkanInterface,
     render_targets: RenderTargets,
-    vertex_buffer: Buffer,
+    memory: Memory,
 
     current_frame: usize,
 }
@@ -42,13 +41,13 @@ impl VulkanRenderer {
         let render_targets = unsafe { RenderTargets::new(&context, swapchain_builder)? }
             .defer(|mut render_targets| unsafe { render_targets.destroy(&context) });
 
-        let vertex_buffer = unsafe { create_vertex_buffer(&context, &interface)? }
-            .defer(|mut vertex_buffer| unsafe { vertex_buffer.destroy(context.device()) });
+        let memory = unsafe { Memory::new(&context, &interface)? }
+            .defer(|mut memory| unsafe { memory.destroy(context.device()) });
 
         Ok(Self {
-            interface: ScopeGuard::into_inner(interface),
+            memory: ScopeGuard::into_inner(memory),
             render_targets: ScopeGuard::into_inner(render_targets),
-            vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
+            interface: ScopeGuard::into_inner(interface),
             context: ScopeGuard::into_inner(context),
             current_frame: 0,
         })
@@ -64,7 +63,7 @@ impl VulkanRenderer {
         self.reset_in_flight_fence()?;
 
         self.reset_command_buffer()?;
-        self.record_command_buffer(image_index)?;
+        unsafe { self.record_command_buffer(image_index)? }
 
         self.submit_command_buffer()?;
         if self.present_image(image_index, window)? {
@@ -130,16 +129,14 @@ impl VulkanRenderer {
         }
     }
 
-    fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
+    unsafe fn record_command_buffer(&self, image_index: u32) -> VkResult<()> {
         // TODO refactor
         let begin_info = vk::CommandBufferBeginInfo::default();
         let command_buffer = self.interface.command_buffers()[self.current_frame];
 
-        unsafe {
-            self.context
-                .device()
-                .begin_command_buffer(command_buffer, &begin_info)?;
-        }
+        self.context
+            .device()
+            .begin_command_buffer(command_buffer, &begin_info)?;
 
         let clear_values = [vk::ClearValue {
             // TODO check if I should use float32
@@ -156,30 +153,29 @@ impl VulkanRenderer {
             })
             .clear_values(&clear_values);
 
-        unsafe {
-            self.context.device().cmd_begin_render_pass(
-                command_buffer,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            );
+        self.context.device().cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_begin_info,
+            vk::SubpassContents::INLINE,
+        );
 
-            self.context.device().cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.render_targets.pipeline(),
-            );
-        }
+        self.context.device().cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.render_targets.pipeline(),
+        );
 
-        let vertex_buffers = [self.vertex_buffer.buffer()];
+        let vertex_buffers = [self.memory.vertex_buffer().buffer()];
         let offsets = [0];
-        unsafe {
-            self.context.device().cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &vertex_buffers,
-                &offsets,
-            );
-        }
+        self.context
+            .device()
+            .cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+        self.context.device().cmd_bind_index_buffer(
+            command_buffer,
+            self.memory.index_buffer().buffer(),
+            0,
+            vk::IndexType::UINT16,
+        );
 
         let viewports = [vk::Viewport::default()
             .x(0.)
@@ -191,17 +187,17 @@ impl VulkanRenderer {
         let scissors = [vk::Rect2D::default()
             .offset(vk::Offset2D { x: 0, y: 0 })
             .extent(self.render_targets.swapchain_extent())];
-        unsafe {
-            self.context
-                .device()
-                .cmd_set_viewport(command_buffer, 0, &viewports);
-            self.context
-                .device()
-                .cmd_set_scissor(command_buffer, 0, &scissors);
-            self.context.device().cmd_draw(command_buffer, 3, 1, 0, 0); // TODO remove the hardcoded 3
-            self.context.device().cmd_end_render_pass(command_buffer);
-            self.context.device().end_command_buffer(command_buffer)?;
-        }
+        self.context
+            .device()
+            .cmd_set_viewport(command_buffer, 0, &viewports);
+        self.context
+            .device()
+            .cmd_set_scissor(command_buffer, 0, &scissors);
+        self.context
+            .device()
+            .cmd_draw_indexed(command_buffer, INDICES.len() as u32, 1, 0, 0, 0);
+        self.context.device().cmd_end_render_pass(command_buffer);
+        self.context.device().end_command_buffer(command_buffer)?;
         Ok(())
     }
 
@@ -332,7 +328,7 @@ impl VulkanRenderer {
                        Attempting to clean resources anyway..."
             );
         }
-        self.vertex_buffer.destroy(self.context.device());
+        self.memory.destroy(self.context.device());
         self.interface.destroy(self.context.device());
         self.render_targets.destroy(&self.context);
         self.context.destroy();

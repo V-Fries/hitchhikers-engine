@@ -1,13 +1,18 @@
 mod buffer;
 mod memory;
 mod render_targets;
+mod uniform_buffer_object;
 mod vulkan_context;
 mod vulkan_interface;
 
+use std::{ptr::copy_nonoverlapping, time::SystemTime};
+
 use crate::utils::{Defer, Result, ScopeGuard};
 use ash::{prelude::VkResult, vk};
+use linear_algebra::{Degree, Matrix};
 use memory::{Memory, INDICES};
 use render_targets::RenderTargets;
+use uniform_buffer_object::UniformBufferObject;
 use vulkan_context::{create_device, PhysicalDeviceData, SwapchainBuilder, VulkanContext};
 use vulkan_interface::VulkanInterface;
 
@@ -20,7 +25,11 @@ pub struct VulkanRenderer {
     render_targets: RenderTargets,
     memory: Memory,
 
+    previous_frame_start_time: SystemTime,
+
     current_frame: usize,
+
+    rotation: Degree<f32>,
 }
 
 type ShouldStopRenderingFrame = bool;
@@ -41,15 +50,17 @@ impl VulkanRenderer {
         let render_targets = unsafe { RenderTargets::new(&context, swapchain_builder)? }
             .defer(|mut render_targets| unsafe { render_targets.destroy(&context) });
 
-        let memory = unsafe { Memory::new(&context, &interface)? }
+        let memory = unsafe { Memory::new(&context, &interface, &render_targets)? }
             .defer(|mut memory| unsafe { memory.destroy(context.device()) });
 
         Ok(Self {
+            rotation: Degree::from(90.),
+            current_frame: 0,
+            previous_frame_start_time: SystemTime::now(),
             memory: ScopeGuard::into_inner(memory),
             render_targets: ScopeGuard::into_inner(render_targets),
             interface: ScopeGuard::into_inner(interface),
             context: ScopeGuard::into_inner(context),
-            current_frame: 0,
         })
     }
 
@@ -59,6 +70,8 @@ impl VulkanRenderer {
         let NextImage::Index(image_index) = self.acquire_next_image(window)? else {
             return Ok(());
         };
+
+        self.update_uniform_buffer();
 
         self.reset_in_flight_fence()?;
 
@@ -82,6 +95,40 @@ impl VulkanRenderer {
                 u64::MAX,
             )
         }
+    }
+
+    fn update_uniform_buffer(&mut self) {
+        let current_time = SystemTime::now();
+        let elapsed_time_sec = match current_time.duration_since(self.previous_frame_start_time) {
+            Ok(elapsed_time) => elapsed_time.as_secs_f32(),
+            Err(_) => 0., // TODO find a cleaner way to handle this
+        };
+        self.previous_frame_start_time = current_time;
+
+        *self.rotation += 90. * elapsed_time_sec;
+
+        let aspect_ratio = self.render_targets.swapchain_extent().width as f32
+            / self.render_targets.swapchain_extent().height as f32;
+        let mut uniform_buffer_object = UniformBufferObject {
+            model: Matrix::model(
+                [0., 0., 1.],
+                self.rotation.clone(),
+                [0., 0., 0.],
+                [1., 1., 1.],
+            ),
+            view: Matrix::look_at([2., 2., 2.], [0., 0., 0.], [0., 0., 1.]),
+            proj: Matrix::perspective_opengl(Degree::from(45.), aspect_ratio, 0.1, 10.),
+        };
+        uniform_buffer_object.proj[1][1] *= -1.;
+
+        unsafe {
+            copy_nonoverlapping(
+                &uniform_buffer_object,
+                self.memory.mapped_uniform_buffers()[self.current_frame]
+                    as *mut UniformBufferObject,
+                1,
+            )
+        };
     }
 
     fn reset_in_flight_fence(&self) -> VkResult<()> {
@@ -193,6 +240,15 @@ impl VulkanRenderer {
         self.context
             .device()
             .cmd_set_scissor(command_buffer, 0, &scissors);
+        let descriptor_sets = [self.memory.descriptor_sets()[self.current_frame]];
+        self.context.device().cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.render_targets.pipeline_layout(),
+            0,
+            &descriptor_sets,
+            &[],
+        );
         self.context
             .device()
             .cmd_draw_indexed(command_buffer, INDICES.len() as u32, 1, 0, 0, 0);

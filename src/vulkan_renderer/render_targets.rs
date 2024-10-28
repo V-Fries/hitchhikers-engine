@@ -5,7 +5,7 @@ mod graphics_pipeline;
 mod image_views;
 
 use crate::utils::{Defer, Result, ScopeGuard};
-use ash::vk;
+use ash::{prelude::VkResult, vk};
 use create_framebuffers::create_framebuffers;
 use create_render_pass::create_render_pass;
 use graphics_pipeline::create_graphics_pipeline;
@@ -26,6 +26,7 @@ pub struct RenderTargets {
     swapchain_image_views: Box<[vk::ImageView]>,
 
     render_pass: vk::RenderPass,
+    descriptor_set_layout: vk::DescriptorSetLayout,
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 
@@ -55,8 +56,19 @@ impl RenderTargets {
         let render_pass = create_render_pass(context.device(), swapchain_format)?
             .defer(|render_pass| context.device().destroy_render_pass(render_pass, None));
 
-        let (pipeline_layout, pipeline) =
-            create_graphics_pipeline(context.device(), &swapchain_extent, *render_pass)?;
+        let descriptor_set_layout =
+            Self::create_descriptor_set_layout(context.device())?.defer(|descriptor_set_layout| {
+                context
+                    .device()
+                    .destroy_descriptor_set_layout(descriptor_set_layout, None)
+            });
+
+        let (pipeline_layout, pipeline) = create_graphics_pipeline(
+            context.device(),
+            &swapchain_extent,
+            *render_pass,
+            *descriptor_set_layout,
+        )?;
         let pipeline_layout = pipeline_layout.defer(|pipeline_layout| {
             context
                 .device()
@@ -76,6 +88,7 @@ impl RenderTargets {
             framebuffers: ScopeGuard::into_inner(framebuffers),
             pipeline: ScopeGuard::into_inner(pipeline),
             pipeline_layout: ScopeGuard::into_inner(pipeline_layout),
+            descriptor_set_layout: ScopeGuard::into_inner(descriptor_set_layout),
             render_pass: ScopeGuard::into_inner(render_pass),
             swapchain_image_views: ScopeGuard::into_inner(swapchain_image_views),
             swapchain: ScopeGuard::into_inner(swapchain),
@@ -85,6 +98,21 @@ impl RenderTargets {
             swapchain_device,
             is_destroyed: false,
         })
+    }
+
+    unsafe fn create_descriptor_set_layout(
+        device: &ash::Device,
+    ) -> VkResult<vk::DescriptorSetLayout> {
+        let ubo_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX);
+
+        device.create_descriptor_set_layout(
+            &vk::DescriptorSetLayoutCreateInfo::default().bindings(&[ubo_layout_binding]),
+            None,
+        )
     }
 
     pub fn render_pass(&self) -> vk::RenderPass {
@@ -119,6 +147,14 @@ impl RenderTargets {
         self.pipeline
     }
 
+    pub fn pipeline_layout(&self) -> vk::PipelineLayout {
+        debug_assert!(
+            !self.is_destroyed,
+            "RenderTargets::pipeline_layout() was called after render_targets destruction"
+        );
+        self.pipeline_layout
+    }
+
     pub fn swapchain_device(&self) -> &ash::khr::swapchain::Device {
         debug_assert!(
             !self.is_destroyed,
@@ -135,12 +171,19 @@ impl RenderTargets {
         self.swapchain
     }
 
+    pub fn descriptor_set_layout(&self) -> vk::DescriptorSetLayout {
+        self.descriptor_set_layout
+    }
+
     pub unsafe fn destroy(&mut self, context: &VulkanContext) {
         if self.is_destroyed {
             return;
         }
         self.is_destroyed = true;
 
+        context
+            .device()
+            .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
         Self::destroy_framebuffers(&self.framebuffers, context);
         context.device().destroy_pipeline(self.pipeline, None);
         context

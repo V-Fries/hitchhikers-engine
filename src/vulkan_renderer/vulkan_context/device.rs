@@ -9,6 +9,7 @@ pub use physical_device::PhysicalDeviceData;
 pub use swapchain_builder::SwapchainBuilder;
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
+    #[cfg(target_os = "macos")]
     vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr(),
     vk::KHR_SWAPCHAIN_NAME.as_ptr(),
 ];

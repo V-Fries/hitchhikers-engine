@@ -212,16 +212,21 @@ impl SwapchainBuilder {
         // complete internal operations before we can acquire another image to
         // render to, so we try to go at least capabilities.min_image_count + 1
 
-        if capabilities.max_image_count < capabilities.min_image_count {
-            Err("swap chain max_image_count is lower than min_image_count")?;
-        }
-
         if capabilities.max_image_count == capabilities.min_image_count {
+            if capabilities.min_image_count == 0 {
+                return Err("swap chain min_image_count can't be 0");
+            }
             return Ok(capabilities.min_image_count);
         }
+
         if capabilities.max_image_count == 0 {
             return Ok(PREFERRED_IMAGE_COUNT.max(capabilities.min_image_count + 1));
         }
+
+        if capabilities.max_image_count < capabilities.min_image_count {
+            return Err("swap chain max_image_count is lower than min_image_count");
+        }
+
         Ok(PREFERRED_IMAGE_COUNT.clamp(
             capabilities.min_image_count + 1,
             capabilities.max_image_count,

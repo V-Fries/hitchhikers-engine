@@ -46,7 +46,7 @@ impl Buffer {
                 )?
                 .defer(|buffer| context.device().destroy_buffer(buffer, None));
 
-            let memory = Self::init_memory(context, *buffer, size, properties)?
+            let memory = Self::init_memory(context, *buffer, properties)?
                 .defer(|memory| context.device().free_memory(memory, None));
 
             context.device().bind_buffer_memory(*buffer, *memory, 0)?;
@@ -62,10 +62,9 @@ impl Buffer {
         }
     }
 
-    fn init_memory(
+    unsafe fn init_memory(
         context: &VulkanContext,
         buffer: vk::Buffer,
-        size: vk::DeviceSize,
         properties: vk::MemoryPropertyFlags,
     ) -> Result<vk::DeviceMemory> {
         unsafe {
@@ -73,7 +72,7 @@ impl Buffer {
 
             let memory = context.device().allocate_memory(
                 &vk::MemoryAllocateInfo::default()
-                    .allocation_size(size)
+                    .allocation_size(memory_requirement.size)
                     .memory_type_index(
                         Self::find_memory_type_index(
                             context,

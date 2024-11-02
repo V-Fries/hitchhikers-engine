@@ -181,9 +181,6 @@ impl RenderTargets {
         }
         self.is_destroyed = true;
 
-        context
-            .device()
-            .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
         Self::destroy_framebuffers(&self.framebuffers, context);
         context.device().destroy_pipeline(self.pipeline, None);
         context
@@ -193,6 +190,9 @@ impl RenderTargets {
         Self::destroy_image_views(&self.swapchain_image_views, context);
         ash::khr::swapchain::Device::new(context.instance(), context.device())
             .destroy_swapchain(self.swapchain, None);
+        context
+            .device()
+            .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
     }
 
     unsafe fn destroy_framebuffers(framebuffers: &[vk::Framebuffer], context: &VulkanContext) {

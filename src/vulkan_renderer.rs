@@ -240,13 +240,12 @@ impl VulkanRenderer {
         self.context
             .device()
             .cmd_set_scissor(command_buffer, 0, &scissors);
-        let descriptor_sets = [self.memory.descriptor_sets()[self.current_frame]];
         self.context.device().cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
             self.render_targets.pipeline_layout(),
             0,
-            &descriptor_sets,
+            &[self.memory.descriptor_sets()[self.current_frame]],
             &[],
         );
         self.context

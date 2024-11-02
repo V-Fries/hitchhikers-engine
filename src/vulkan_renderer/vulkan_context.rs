@@ -65,7 +65,8 @@ impl VulkanContext {
                 surface: ScopeGuard::into_inner(surface),
                 surface_instance,
                 #[cfg(feature = "validation_layers")]
-                debug_messenger: ScopeGuard::into_inner(debug_messenger).unwrap(),
+                debug_messenger: ScopeGuard::into_inner(debug_messenger)
+                    .expect("Debug messenger was not initialized"),
                 instance: ScopeGuard::into_inner(instance),
                 entry,
                 is_device_destroyed: false,

@@ -16,6 +16,7 @@ pub unsafe fn create_graphics_pipeline(
     device: &ash::Device,
     swapchain_extent: &vk::Extent2D,
     render_pass: vk::RenderPass,
+    descriptor_set_layout: vk::DescriptorSetLayout,
 ) -> Result<(vk::PipelineLayout, vk::Pipeline)> {
     // TODO refactor
     let shader_stage_create_infos = ShaderStageCreateInfos::new(device)?;
@@ -29,7 +30,7 @@ pub unsafe fn create_graphics_pipeline(
     let multisample_state_create_info = multisample_state_create_info();
     let color_blend_state_create_info = ColorBlendStateCreateInfo::new();
     let dynamic_state_create_info = DynamicStateCreateInfo::new();
-    let pipeline_layout = create_pipeline_layout(device)?;
+    let pipeline_layout = create_pipeline_layout(device, descriptor_set_layout)?;
 
     let create_infos = [vk::GraphicsPipelineCreateInfo::default()
         .stages(shader_stage_create_infos.create_infos())

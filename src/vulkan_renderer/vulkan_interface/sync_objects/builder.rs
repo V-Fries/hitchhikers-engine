@@ -28,14 +28,19 @@ impl<'a> SyncObjectsBuilder<'a> {
                 .take()
                 .as_slice()
                 .try_into()
-                .unwrap(),
+                .expect("image_available_semaphores was not initialized"),
             render_finished_semaphores: self
                 .render_finished_semaphores
                 .take()
                 .as_slice()
                 .try_into()
-                .unwrap(),
-            in_flight_fences: self.in_flight_fences.take().as_slice().try_into().unwrap(),
+                .expect("render_finished_semaphores was not initialized"),
+            in_flight_fences: self
+                .in_flight_fences
+                .take()
+                .as_slice()
+                .try_into()
+                .expect("in_flight_fences was not initialized"),
         })
     }
 

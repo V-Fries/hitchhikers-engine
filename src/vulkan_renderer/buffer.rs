@@ -197,7 +197,19 @@ impl Buffer {
     }
 
     pub fn buffer(&self) -> vk::Buffer {
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(!self.is_destroyed);
+        }
         self.buffer
+    }
+
+    pub fn memory(&self) -> vk::DeviceMemory {
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(!self.is_destroyed);
+        }
+        self.memory
     }
 
     pub unsafe fn destroy(&mut self, device: &ash::Device) {

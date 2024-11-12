@@ -3,6 +3,7 @@ mod create_uniform_buffers;
 mod create_vertex_buffer;
 mod descriptors;
 mod errors;
+mod image;
 
 use std::{ffi::c_void, sync::LazyLock};
 
@@ -15,12 +16,20 @@ use super::{
     buffer::Buffer, render_targets::RenderTargets, vulkan_context::VulkanContext,
     vulkan_interface::VulkanInterface, NB_OF_FRAMES_IN_FLIGHT_USIZE,
 };
+use crate::error_struct;
 use ash::vk;
 use create_index_buffer::create_index_buffer;
 use create_uniform_buffers::create_uniform_buffers;
 use create_vertex_buffer::create_vertex_buffer;
 use descriptors::create_descriptor_pool;
 use descriptors::create_descriptor_sets;
+use image::Image;
+use image_parser::ppm::PpmFilePath;
+
+error_struct!(
+    FailedToFindMemoryTypeIndex,
+    "Failed to find memory type index when trying to allocate memory for a buffer"
+);
 
 // TODO remove this
 pub static VERTICES: LazyLock<[Vertex; 4]> = LazyLock::new(|| {
@@ -35,6 +44,9 @@ pub static VERTICES: LazyLock<[Vertex; 4]> = LazyLock::new(|| {
 // TODO remove this
 pub static INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
+// TODO remove this
+pub const PPM_FILE_PATH: &str = "assets/textures/test.ppm";
+
 pub struct Memory {
     vertex_buffer: Buffer,
     index_buffer: Buffer,
@@ -44,6 +56,8 @@ pub struct Memory {
 
     descriptor_pool: vk::DescriptorPool,
     descriptor_sets: [vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE],
+
+    texture: Image,
 }
 
 impl Memory {
@@ -77,7 +91,12 @@ impl Memory {
             &uniform_buffers,
         )?;
 
+        let image = image_parser::Image::try_from(PpmFilePath(PPM_FILE_PATH))?;
+        let texture = Image::from_texture_image(context, interface, &image)?
+            .defer(|mut texture| texture.destroy(context.device()));
+
         Ok(Self {
+            texture: ScopeGuard::into_inner(texture),
             descriptor_sets,
             descriptor_pool: ScopeGuard::into_inner(descriptor_pool),
             mapped_uniform_buffers,
@@ -85,6 +104,27 @@ impl Memory {
             index_buffer: ScopeGuard::into_inner(index_buffer),
             vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
         })
+    }
+
+    pub fn find_memory_type_index(
+        context: &VulkanContext,
+        memory_type_filter: u32,
+        properties: vk::MemoryPropertyFlags,
+    ) -> Result<u32, FailedToFindMemoryTypeIndex> {
+        unsafe {
+            context
+                .instance()
+                .get_physical_device_memory_properties(context.physical_device())
+        }
+        .memory_types
+        .iter()
+        .enumerate()
+        .find(|(index, memory_type)| {
+            memory_type_filter & (1 << index) != 0
+                && memory_type.property_flags & properties == properties
+        })
+        .map(|(index, _)| index as u32)
+        .ok_or(FailedToFindMemoryTypeIndex {})
     }
 
     pub fn vertex_buffer(&self) -> &Buffer {
@@ -108,6 +148,7 @@ impl Memory {
         Self::destroy_uniform_buffers(device, &mut self.uniform_buffers);
         self.vertex_buffer.destroy(device);
         self.index_buffer.destroy(device);
+        self.texture.destroy(device);
     }
 
     pub unsafe fn destroy_uniform_buffers(device: &ash::Device, buffers: &mut [Buffer]) {

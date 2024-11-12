@@ -4,13 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["crates/linear_algebra"]
+members = [
+    "crates/linear_algebra",
+    "crates/image-parser",
+]
 
 [features]
 validation_layers = []
 
 [dependencies]
 linear_algebra = { path = "./crates/linear_algebra" }
+image-parser = { path = "./crates/image-parser" }
 
 # Vulkan wrapper
 ash = "0.38.0"

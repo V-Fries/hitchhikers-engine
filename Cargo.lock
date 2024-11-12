@@ -418,9 +418,14 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "ash-window",
+ "image-parser",
  "linear_algebra",
  "winit",
 ]
+
+[[package]]
+name = "image-parser"
+version = "0.1.0"
 
 [[package]]
 name = "indexmap"

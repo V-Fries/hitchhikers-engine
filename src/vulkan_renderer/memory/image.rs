@@ -10,8 +10,19 @@ use ash::{prelude::VkResult, vk};
 pub struct Image {
     image: vk::Image,
     memory: vk::DeviceMemory,
+    image_view: vk::ImageView,
     #[cfg(debug_assertions)]
     is_destroyed: bool,
+}
+
+struct TransitionImageLayoutInfo {
+    _format: vk::Format,
+    old_layout: vk::ImageLayout,
+    new_layout: vk::ImageLayout,
+    src_access_mask: vk::AccessFlags,
+    dst_access_mask: vk::AccessFlags,
+    src_stage_mask: vk::PipelineStageFlags,
+    dst_stage_mask: vk::PipelineStageFlags,
 }
 
 impl Image {
@@ -32,7 +43,14 @@ impl Image {
 
         unsafe { context.device().bind_image_memory(*image, *memory, 0)? };
 
+        let image_view =
+            unsafe { Self::init_image_view(context.device(), *image, vk::Format::R8G8B8A8_SRGB)? }
+                .defer(|image_view| unsafe {
+                    context.device().destroy_image_view(image_view, None)
+                });
+
         Ok(Self {
+            image_view: ScopeGuard::into_inner(image_view),
             memory: ScopeGuard::into_inner(memory),
             image: ScopeGuard::into_inner(image),
             #[cfg(debug_assertions)]
@@ -77,6 +95,28 @@ impl Image {
                 properties,
             )?);
         Ok(unsafe { context.device().allocate_memory(&alloc_info, None)? })
+    }
+
+    unsafe fn init_image_view(
+        device: &ash::Device,
+        image: vk::Image,
+        format: vk::Format,
+    ) -> VkResult<vk::ImageView> {
+        device.create_image_view(
+            &vk::ImageViewCreateInfo::default()
+                .image(image)
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .format(format)
+                .subresource_range(
+                    vk::ImageSubresourceRange::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_mip_level(0)
+                        .level_count(1)
+                        .base_array_layer(0)
+                        .layer_count(1),
+                ),
+            None,
+        )
     }
 
     pub fn from_texture_image(
@@ -144,13 +184,15 @@ impl Image {
             self.transition_image_layout(
                 device,
                 interface,
-                format,
-                vk::ImageLayout::UNDEFINED,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                vk::AccessFlags::empty(),
-                vk::AccessFlags::TRANSFER_WRITE,
-                vk::PipelineStageFlags::TOP_OF_PIPE,
-                vk::PipelineStageFlags::TRANSFER,
+                TransitionImageLayoutInfo {
+                    _format: format,
+                    old_layout: vk::ImageLayout::UNDEFINED,
+                    new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    src_access_mask: vk::AccessFlags::empty(),
+                    dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                    src_stage_mask: vk::PipelineStageFlags::TOP_OF_PIPE,
+                    dst_stage_mask: vk::PipelineStageFlags::TRANSFER,
+                },
             )
         }
     }
@@ -165,13 +207,15 @@ impl Image {
             self.transition_image_layout(
                 device,
                 interface,
-                format,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                vk::AccessFlags::TRANSFER_WRITE,
-                vk::AccessFlags::SHADER_READ,
-                vk::PipelineStageFlags::TRANSFER,
-                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                TransitionImageLayoutInfo {
+                    _format: format,
+                    old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                    dst_access_mask: vk::AccessFlags::SHADER_READ,
+                    src_stage_mask: vk::PipelineStageFlags::TRANSFER,
+                    dst_stage_mask: vk::PipelineStageFlags::FRAGMENT_SHADER,
+                },
             )
         }
     }
@@ -180,19 +224,13 @@ impl Image {
         &self,
         device: &ash::Device,
         interface: &VulkanInterface,
-        _format: vk::Format,
-        old_layout: vk::ImageLayout,
-        new_layout: vk::ImageLayout,
-        src_access_mask: vk::AccessFlags,
-        dst_access_mask: vk::AccessFlags,
-        src_stage_mask: vk::PipelineStageFlags,
-        dst_stage_mask: vk::PipelineStageFlags,
+        info: TransitionImageLayoutInfo,
     ) -> VkResult<()> {
         let single_time_command = SingleTimeCommand::begin(device, interface)?;
 
         let barrier = vk::ImageMemoryBarrier::default()
-            .old_layout(old_layout)
-            .new_layout(new_layout)
+            .old_layout(info.old_layout)
+            .new_layout(info.new_layout)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(self.image)
@@ -204,13 +242,13 @@ impl Image {
                     .base_array_layer(0)
                     .layer_count(1),
             )
-            .src_access_mask(src_access_mask)
-            .dst_access_mask(dst_access_mask);
+            .src_access_mask(info.src_access_mask)
+            .dst_access_mask(info.dst_access_mask);
 
         device.cmd_pipeline_barrier(
             *single_time_command,
-            src_stage_mask,
-            dst_stage_mask,
+            info.src_stage_mask,
+            info.dst_stage_mask,
             vk::DependencyFlags::empty(),
             &[],
             &[],
@@ -266,6 +304,7 @@ impl Image {
             self.is_destroyed = true;
         }
 
+        device.destroy_image_view(self.image_view, None);
         device.destroy_image(self.image, None);
         device.free_memory(self.memory, None);
     }

@@ -165,9 +165,7 @@ impl VulkanRenderer {
         // TODO the image available semaphore is left signaled and unused!!
         //      to test this easily, disable Resized event handling
         //      Deleting and recreating the semaphore fixes the issue, but is there a better way?
-        unsafe {
-            self.recreate_swapchain(window)?;
-        }
+        unsafe { self.recreate_swapchain(window)? }
         Ok(NextImage::ShouldStopRenderingFrame)
     }
 

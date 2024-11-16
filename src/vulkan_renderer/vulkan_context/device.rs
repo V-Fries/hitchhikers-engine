@@ -26,7 +26,7 @@ pub unsafe fn create_device(
         .map(|index| get_device_queue_create_info(index, &queue_priority))
         .collect();
 
-    let device_features = get_device_features();
+    let device_features = get_device_features(&device_data.physical_device_features);
     let device_create_info = get_device_create_info(&queue_create_infos, &device_features);
 
     unsafe {
@@ -45,8 +45,11 @@ fn get_device_queue_create_info(
         .queue_priorities(queue_priority)
 }
 
-fn get_device_features() -> vk::PhysicalDeviceFeatures {
+fn get_device_features(
+    physical_device_features: &vk::PhysicalDeviceFeatures,
+) -> vk::PhysicalDeviceFeatures {
     vk::PhysicalDeviceFeatures::default()
+        .sampler_anisotropy(physical_device_features.sampler_anisotropy != 0)
 }
 
 fn get_device_create_info<'a>(

@@ -371,6 +371,7 @@ impl VulkanRenderer {
             create_device(self.context.instance(), &physical_device_data)?,
             physical_device_data.physical_device,
             physical_device_data.physical_device_properties,
+            physical_device_data.physical_device_features,
         );
 
         self.interface = VulkanInterface::new(&self.context, physical_device_data.queue_families)?;

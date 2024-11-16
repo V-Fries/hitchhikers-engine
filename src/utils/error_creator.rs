@@ -8,9 +8,9 @@ macro_rules! error_struct {
 
         impl $struct_name {
             #[allow(dead_code)]
-            pub fn new($( $( $field_name : $field_type ),* )?) -> Self {
+            pub fn new($( $( $field_name : impl Into<$field_type> ),* )?) -> Self {
                 $struct_name {
-                    $( $( $field_name ),* )?
+                    $( $( $field_name: $field_name.into() ),* )?
                 }
             }
         }

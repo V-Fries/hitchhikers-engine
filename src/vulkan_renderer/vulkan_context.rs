@@ -23,6 +23,7 @@ pub struct VulkanContext {
     surface_instance: ash::khr::surface::Instance,
     physical_device: vk::PhysicalDevice,
     physical_device_properties: vk::PhysicalDeviceProperties,
+    physical_device_features: vk::PhysicalDeviceFeatures,
     device: ash::Device,
     is_device_destroyed: bool,
 }
@@ -62,6 +63,7 @@ impl VulkanContext {
         Ok((
             VulkanContext {
                 device: ScopeGuard::into_inner(device),
+                physical_device_features: physical_device_data.physical_device_features,
                 physical_device_properties: physical_device_data.physical_device_properties,
                 physical_device: physical_device_data.physical_device,
                 surface: ScopeGuard::into_inner(surface),
@@ -99,6 +101,7 @@ impl VulkanContext {
         device: ash::Device,
         physical_device: vk::PhysicalDevice,
         physical_device_properties: vk::PhysicalDeviceProperties,
+        physical_device_features: vk::PhysicalDeviceFeatures,
     ) {
         // TODO maybe make a Device struct that holds both those values?
 
@@ -110,6 +113,7 @@ impl VulkanContext {
         self.physical_device = physical_device;
         self.device = device;
         self.physical_device_properties = physical_device_properties;
+        self.physical_device_features = physical_device_features;
         self.is_device_destroyed = false;
     }
 
@@ -122,13 +126,22 @@ impl VulkanContext {
         self.physical_device
     }
 
-    pub fn physical_device_properties(&self) -> vk::PhysicalDeviceProperties {
+    pub fn physical_device_properties(&self) -> &vk::PhysicalDeviceProperties {
         debug_assert!(
             !self.is_device_destroyed,
             "VulkanContext::physical_device_properties() was called after device destruction"
         );
 
-        self.physical_device_properties
+        &self.physical_device_properties
+    }
+
+    pub fn physical_device_features(&self) -> &vk::PhysicalDeviceFeatures {
+        debug_assert!(
+            !self.is_device_destroyed,
+            "VulkanContext::physical_device_features() was called after device destruction"
+        );
+
+        &self.physical_device_features
     }
 
     pub fn instance(&self) -> &ash::Instance {

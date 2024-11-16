@@ -1,4 +1,4 @@
-use crate::utils::{GetAllUniques, PipeLine};
+use crate::utils::{GetAllUniques, PipeLine, Result};
 use crate::vulkan_renderer::vulkan_context::errors::PhysicalDeviceIsNotSuitable;
 use ash::vk;
 
@@ -23,18 +23,17 @@ impl QueueFamilies {
 }
 
 impl QueueFamiliesBuilder {
-    pub fn build(&self, device: vk::PhysicalDevice) -> crate::utils::Result<QueueFamilies> {
-        let option_to_u32 = |option: Option<usize>,
-                             queue_name: &str|
-         -> crate::utils::Result<u32, PhysicalDeviceIsNotSuitable> {
-            option
-                .ok_or(PhysicalDeviceIsNotSuitable::new(
-                    device,
-                    format!("{queue_name} queue is not supported"),
-                ))?
-                .pipe(|p| p as u32)
-                .pipe(Ok)
-        };
+    pub fn build(&self, device: vk::PhysicalDevice) -> Result<QueueFamilies> {
+        let option_to_u32 =
+            |option: Option<usize>, queue_name: &str| -> Result<u32, PhysicalDeviceIsNotSuitable> {
+                option
+                    .ok_or(PhysicalDeviceIsNotSuitable::new(
+                        device,
+                        format!("{queue_name} queue is not supported"),
+                    ))?
+                    .pipe(|p| p as u32)
+                    .pipe(Ok)
+            };
 
         Ok(QueueFamilies {
             graphics_index: option_to_u32(self.graphics_index, "graphics")?,

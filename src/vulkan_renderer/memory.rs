@@ -112,6 +112,19 @@ impl Memory {
     }
 
     fn init_sampler(context: &VulkanContext) -> VkResult<vk::Sampler> {
+        let (anisotropy_enable, max_anisotropy) =
+            if context.physical_device_features().sampler_anisotropy != 0 {
+                (
+                    true,
+                    context
+                        .physical_device_properties()
+                        .limits
+                        .max_sampler_anisotropy,
+                )
+            } else {
+                (false, 1.)
+            };
+
         unsafe {
             context.device().create_sampler(
                 &vk::SamplerCreateInfo::default()
@@ -120,13 +133,8 @@ impl Memory {
                     .address_mode_u(vk::SamplerAddressMode::REPEAT)
                     .address_mode_v(vk::SamplerAddressMode::REPEAT)
                     .address_mode_w(vk::SamplerAddressMode::REPEAT)
-                    .anisotropy_enable(true)
-                    .max_anisotropy(
-                        context
-                            .physical_device_properties()
-                            .limits
-                            .max_sampler_anisotropy,
-                    )
+                    .anisotropy_enable(anisotropy_enable)
+                    .max_anisotropy(max_anisotropy)
                     .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                     .unnormalized_coordinates(false)
                     .compare_enable(false)

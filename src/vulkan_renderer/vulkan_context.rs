@@ -22,6 +22,7 @@ pub struct VulkanContext {
     surface: vk::SurfaceKHR,
     surface_instance: ash::khr::surface::Instance,
     physical_device: vk::PhysicalDevice,
+    physical_device_properties: vk::PhysicalDeviceProperties,
     device: ash::Device,
     is_device_destroyed: bool,
 }
@@ -61,6 +62,7 @@ impl VulkanContext {
         Ok((
             VulkanContext {
                 device: ScopeGuard::into_inner(device),
+                physical_device_properties: physical_device_data.physical_device_properties,
                 physical_device: physical_device_data.physical_device,
                 surface: ScopeGuard::into_inner(surface),
                 surface_instance,
@@ -92,7 +94,12 @@ impl VulkanContext {
         &self.device
     }
 
-    pub fn set_device(&mut self, device: ash::Device, physical_device: vk::PhysicalDevice) {
+    pub fn set_device(
+        &mut self,
+        device: ash::Device,
+        physical_device: vk::PhysicalDevice,
+        physical_device_properties: vk::PhysicalDeviceProperties,
+    ) {
         // TODO maybe make a Device struct that holds both those values?
 
         debug_assert!(
@@ -102,6 +109,7 @@ impl VulkanContext {
 
         self.physical_device = physical_device;
         self.device = device;
+        self.physical_device_properties = physical_device_properties;
         self.is_device_destroyed = false;
     }
 
@@ -112,6 +120,15 @@ impl VulkanContext {
         );
 
         self.physical_device
+    }
+
+    pub fn physical_device_properties(&self) -> vk::PhysicalDeviceProperties {
+        debug_assert!(
+            !self.is_device_destroyed,
+            "VulkanContext::physical_device_properties() was called after device destruction"
+        );
+
+        self.physical_device_properties
     }
 
     pub fn instance(&self) -> &ash::Instance {

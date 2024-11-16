@@ -17,7 +17,7 @@ use super::{
     vulkan_interface::VulkanInterface, NB_OF_FRAMES_IN_FLIGHT_USIZE,
 };
 use crate::error_struct;
-use ash::vk;
+use ash::{prelude::VkResult, vk};
 use create_index_buffer::create_index_buffer;
 use create_uniform_buffers::create_uniform_buffers;
 use create_vertex_buffer::create_vertex_buffer;
@@ -58,6 +58,7 @@ pub struct Memory {
     descriptor_sets: [vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE],
 
     texture: Image,
+    sampler: vk::Sampler,
 }
 
 impl Memory {
@@ -95,7 +96,11 @@ impl Memory {
         let texture = Image::from_texture_image(context, interface, &image)?
             .defer(|mut texture| texture.destroy(context.device()));
 
+        let sampler = Self::init_sampler(context)?
+            .defer(|sampler| unsafe { context.device().destroy_sampler(sampler, None) });
+
         Ok(Self {
+            sampler: ScopeGuard::into_inner(sampler),
             texture: ScopeGuard::into_inner(texture),
             descriptor_sets,
             descriptor_pool: ScopeGuard::into_inner(descriptor_pool),
@@ -104,6 +109,35 @@ impl Memory {
             index_buffer: ScopeGuard::into_inner(index_buffer),
             vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
         })
+    }
+
+    fn init_sampler(context: &VulkanContext) -> VkResult<vk::Sampler> {
+        unsafe {
+            context.device().create_sampler(
+                &vk::SamplerCreateInfo::default()
+                    .mag_filter(vk::Filter::LINEAR)
+                    .min_filter(vk::Filter::LINEAR)
+                    .address_mode_u(vk::SamplerAddressMode::REPEAT)
+                    .address_mode_v(vk::SamplerAddressMode::REPEAT)
+                    .address_mode_w(vk::SamplerAddressMode::REPEAT)
+                    .anisotropy_enable(true)
+                    .max_anisotropy(
+                        context
+                            .physical_device_properties()
+                            .limits
+                            .max_sampler_anisotropy,
+                    )
+                    .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                    .unnormalized_coordinates(false)
+                    .compare_enable(false)
+                    .compare_op(vk::CompareOp::ALWAYS)
+                    .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                    .mip_lod_bias(0.)
+                    .min_lod(0.)
+                    .max_lod(0.),
+                None,
+            )
+        }
     }
 
     pub fn find_memory_type_index(
@@ -149,6 +183,7 @@ impl Memory {
         self.vertex_buffer.destroy(device);
         self.index_buffer.destroy(device);
         self.texture.destroy(device);
+        device.destroy_sampler(self.sampler, None);
     }
 
     pub unsafe fn destroy_uniform_buffers(device: &ash::Device, buffers: &mut [Buffer]) {

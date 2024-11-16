@@ -15,6 +15,7 @@ type ExtensionName = String;
 
 pub struct PhysicalDeviceData {
     pub physical_device: vk::PhysicalDevice,
+    pub physical_device_properties: vk::PhysicalDeviceProperties,
     pub queue_families: QueueFamilies,
     pub swapchain_builder: SwapchainBuilder,
 }
@@ -85,6 +86,7 @@ impl ScoredPhysicalDeviceData {
         Ok(ScoredPhysicalDeviceData {
             physical_device_data: PhysicalDeviceData {
                 physical_device: device,
+                physical_device_properties: device_properties,
                 queue_families,
                 swapchain_builder,
             },

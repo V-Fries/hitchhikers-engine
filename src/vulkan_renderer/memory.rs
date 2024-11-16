@@ -112,18 +112,7 @@ impl Memory {
     }
 
     fn init_sampler(context: &VulkanContext) -> VkResult<vk::Sampler> {
-        let (anisotropy_enable, max_anisotropy) =
-            if context.physical_device_features().sampler_anisotropy != 0 {
-                (
-                    true,
-                    context
-                        .physical_device_properties()
-                        .limits
-                        .max_sampler_anisotropy,
-                )
-            } else {
-                (false, 1.)
-            };
+        let (anisotropy_enable, max_anisotropy) = Self::get_anisotropy_settings(context);
 
         unsafe {
             context.device().create_sampler(
@@ -145,6 +134,20 @@ impl Memory {
                     .max_lod(0.),
                 None,
             )
+        }
+    }
+
+    fn get_anisotropy_settings(context: &VulkanContext) -> (bool, f32) {
+        if context.physical_device_features().sampler_anisotropy != 0 {
+            (
+                true,
+                context
+                    .physical_device_properties()
+                    .limits
+                    .max_sampler_anisotropy,
+            )
+        } else {
+            (false, 1.)
         }
     }
 

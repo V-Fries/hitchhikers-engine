@@ -48,6 +48,8 @@ pub static INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 pub const PPM_FILE_PATH: &str = "assets/textures/test.ppm";
 
 pub struct Memory {
+    is_destroyed: bool,
+
     vertex_buffer: Buffer,
     index_buffer: Buffer,
 
@@ -108,6 +110,7 @@ impl Memory {
             uniform_buffers: ScopeGuard::into_inner(uniform_buffers),
             index_buffer: ScopeGuard::into_inner(index_buffer),
             vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
+            is_destroyed: false,
         })
     }
 
@@ -173,22 +176,36 @@ impl Memory {
     }
 
     pub fn vertex_buffer(&self) -> &Buffer {
+        debug_assert!(!self.is_destroyed);
+
         &self.vertex_buffer
     }
 
     pub fn index_buffer(&self) -> &Buffer {
+        debug_assert!(!self.is_destroyed);
+
         &self.index_buffer
     }
 
     pub fn mapped_uniform_buffers(&self) -> &[*mut c_void; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
+        debug_assert!(!self.is_destroyed);
+
         &self.mapped_uniform_buffers
     }
 
     pub fn descriptor_sets(&self) -> &[vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
+        debug_assert!(!self.is_destroyed);
+
         &self.descriptor_sets
     }
 
     pub unsafe fn destroy(&mut self, device: &ash::Device) {
+        // If an error occurs during swapchain recreation this function might be called twice
+        if self.is_destroyed {
+            return;
+        }
+        self.is_destroyed = true;
+
         device.destroy_descriptor_pool(self.descriptor_pool, None);
         Self::destroy_uniform_buffers(device, &mut self.uniform_buffers);
         self.vertex_buffer.destroy(device);

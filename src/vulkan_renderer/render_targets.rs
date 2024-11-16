@@ -176,6 +176,7 @@ impl RenderTargets {
     }
 
     pub unsafe fn destroy(&mut self, context: &VulkanContext) {
+        // If an error occurs during swapchain recreation this function might be called twice
         if self.is_destroyed {
             return;
         }

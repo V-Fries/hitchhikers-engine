@@ -85,7 +85,7 @@ impl VulkanInterface {
     }
 
     pub unsafe fn destroy(&mut self, device: &ash::Device) {
-        // If an error occurs during swapchain recreating this function might be called twice
+        // If an error occurs during swapchain recreation this function might be called twice
         if self.is_destroyed {
             return;
         }

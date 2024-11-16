@@ -40,6 +40,8 @@ enum NextImage {
     ShouldStopRenderingFrame,
 }
 
+type ShouldInitMemory = bool;
+
 impl VulkanRenderer {
     pub fn new(window: &winit::window::Window) -> Result<Self> {
         let (context, queue_families, swapchain_builder) = VulkanContext::new(window)?;
@@ -162,6 +164,7 @@ impl VulkanRenderer {
         };
         // TODO the image available semaphore is left signaled and unused!!
         //      to test this easily, disable Resized event handling
+        //      Deleting and recreating the semaphore fixes the issue, but is there a better way?
         unsafe {
             self.recreate_swapchain(window)?;
         }
@@ -325,7 +328,7 @@ impl VulkanRenderer {
 
         self.render_targets.destroy(&self.context);
 
-        let swapchain_builder = self.create_swapchain_builder(window)?;
+        let (swapchain_builder, should_init_memory) = self.create_swapchain_builder(window)?;
 
         // TODO this can be optimized as the render pass doesn't always
         //      need to be recreated
@@ -338,13 +341,16 @@ impl VulkanRenderer {
         //      using it.
 
         self.render_targets = RenderTargets::new(&self.context, swapchain_builder)?;
+        if should_init_memory {
+            self.memory = Memory::new(&self.context, &self.interface, &self.render_targets)?;
+        }
         Ok(())
     }
 
     pub unsafe fn create_swapchain_builder(
         &mut self,
         window: &winit::window::Window,
-    ) -> Result<SwapchainBuilder> {
+    ) -> Result<(SwapchainBuilder, ShouldInitMemory)> {
         let window_inner_size = window.inner_size();
 
         if let Ok(swapchain_builder) = SwapchainBuilder::new(
@@ -354,9 +360,10 @@ impl VulkanRenderer {
             self.context.surface(),
             window_inner_size,
         ) {
-            return Ok(swapchain_builder);
+            return Ok((swapchain_builder, false));
         }
-
+        
+        self.memory.destroy(self.context.device());
         self.interface.destroy(self.context.device());
         self.context.destroy_device();
 
@@ -376,7 +383,7 @@ impl VulkanRenderer {
 
         self.interface = VulkanInterface::new(&self.context, physical_device_data.queue_families)?;
 
-        Ok(physical_device_data.swapchain_builder)
+        Ok((physical_device_data.swapchain_builder, true))
     }
 
     pub unsafe fn destroy(&mut self) {

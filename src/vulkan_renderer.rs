@@ -40,7 +40,10 @@ enum NextImage {
     ShouldStopRenderingFrame,
 }
 
-type ShouldInitMemory = bool;
+enum ShouldRecreateMemory {
+    Entirely,
+    OnlyDescriptors,
+}
 
 impl VulkanRenderer {
     pub fn new(window: &winit::window::Window) -> Result<Self> {
@@ -324,9 +327,10 @@ impl VulkanRenderer {
             return Ok(());
         }
 
+        self.memory.destroy_descriptors(self.context.device());
         self.render_targets.destroy(&self.context);
 
-        let (swapchain_builder, should_init_memory) = self.create_swapchain_builder(window)?;
+        let (swapchain_builder, should_recreate_memory) = self.create_swapchain_builder(window)?;
 
         // TODO this can be optimized as the render pass doesn't always
         //      need to be recreated
@@ -339,16 +343,27 @@ impl VulkanRenderer {
         //      using it.
 
         self.render_targets = RenderTargets::new(&self.context, swapchain_builder)?;
-        if should_init_memory {
-            self.memory = Memory::new(&self.context, &self.interface, &self.render_targets)?;
+        match should_recreate_memory {
+            ShouldRecreateMemory::Entirely => {
+                self.memory = Memory::new(&self.context, &self.interface, &self.render_targets)?
+            }
+            ShouldRecreateMemory::OnlyDescriptors => unsafe {
+                let (descriptor_pool, descriptor_sets) = Memory::create_descriptors(
+                    &self.context,
+                    &self.render_targets,
+                    self.memory.uniform_buffers(),
+                )?;
+                self.memory
+                    .set_descriptors(descriptor_pool, descriptor_sets);
+            },
         }
         Ok(())
     }
 
-    pub unsafe fn create_swapchain_builder(
+    unsafe fn create_swapchain_builder(
         &mut self,
         window: &winit::window::Window,
-    ) -> Result<(SwapchainBuilder, ShouldInitMemory)> {
+    ) -> Result<(SwapchainBuilder, ShouldRecreateMemory)> {
         let window_inner_size = window.inner_size();
 
         if let Ok(swapchain_builder) = SwapchainBuilder::new(
@@ -358,9 +373,9 @@ impl VulkanRenderer {
             self.context.surface(),
             window_inner_size,
         ) {
-            return Ok((swapchain_builder, false));
+            return Ok((swapchain_builder, ShouldRecreateMemory::OnlyDescriptors));
         }
-        
+
         self.memory.destroy(self.context.device());
         self.interface.destroy(self.context.device());
         self.context.destroy_device();
@@ -381,7 +396,10 @@ impl VulkanRenderer {
 
         self.interface = VulkanInterface::new(&self.context, physical_device_data.queue_families)?;
 
-        Ok((physical_device_data.swapchain_builder, true))
+        Ok((
+            physical_device_data.swapchain_builder,
+            ShouldRecreateMemory::Entirely,
+        ))
     }
 
     pub unsafe fn destroy(&mut self) {

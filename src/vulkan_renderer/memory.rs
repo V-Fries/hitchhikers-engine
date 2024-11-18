@@ -56,6 +56,7 @@ pub struct Memory {
     uniform_buffers: [Buffer; NB_OF_FRAMES_IN_FLIGHT_USIZE],
     mapped_uniform_buffers: [*mut c_void; NB_OF_FRAMES_IN_FLIGHT_USIZE],
 
+    descriptors_are_destroyed: bool,
     descriptor_pool: vk::DescriptorPool,
     descriptor_sets: [vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE],
 
@@ -80,19 +81,13 @@ impl Memory {
             Self::destroy_uniform_buffers(context.device(), &mut uniform_buffers)
         });
 
-        let descriptor_pool = create_descriptor_pool(context.device())?.defer(|descriptor_pool| {
+        let (descriptor_pool, descriptor_sets) =
+            Self::create_descriptors(context, render_targets, &uniform_buffers)?;
+        let descriptor_pool = descriptor_pool.defer(|descriptor_pool| {
             context
                 .device()
                 .destroy_descriptor_pool(descriptor_pool, None)
         });
-
-        // Destroyed automatically when descriptor_pool is destroyed
-        let descriptor_sets = create_descriptor_sets(
-            context.device(),
-            render_targets.descriptor_set_layout(),
-            *descriptor_pool,
-            &uniform_buffers,
-        )?;
 
         let image = image_parser::Image::try_from(PpmFilePath(PPM_FILE_PATH))?;
         let texture = Image::from_texture_image(context, interface, &image)?
@@ -106,12 +101,59 @@ impl Memory {
             texture: ScopeGuard::into_inner(texture),
             descriptor_sets,
             descriptor_pool: ScopeGuard::into_inner(descriptor_pool),
+            descriptors_are_destroyed: false,
             mapped_uniform_buffers,
             uniform_buffers: ScopeGuard::into_inner(uniform_buffers),
             index_buffer: ScopeGuard::into_inner(index_buffer),
             vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
             is_destroyed: false,
         })
+    }
+
+    pub unsafe fn create_descriptors(
+        context: &VulkanContext,
+        render_targets: &RenderTargets,
+        uniform_buffers: &[Buffer; NB_OF_FRAMES_IN_FLIGHT_USIZE],
+    ) -> Result<(
+        vk::DescriptorPool,
+        [vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE],
+    )> {
+        let descriptor_pool = create_descriptor_pool(context.device())?.defer(|descriptor_pool| {
+            context
+                .device()
+                .destroy_descriptor_pool(descriptor_pool, None)
+        });
+
+        // Destroyed automatically when descriptor_pool is destroyed
+        let descriptor_sets = create_descriptor_sets(
+            context.device(),
+            render_targets.descriptor_set_layout(),
+            *descriptor_pool,
+            uniform_buffers,
+        )?;
+
+        Ok((ScopeGuard::into_inner(descriptor_pool), descriptor_sets))
+    }
+
+    pub unsafe fn set_descriptors(
+        &mut self,
+        pool: vk::DescriptorPool,
+        sets: [vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE],
+    ) {
+        debug_assert!(!self.is_destroyed);
+        debug_assert!(self.descriptors_are_destroyed);
+
+        self.descriptor_pool = pool;
+        self.descriptor_sets = sets;
+        self.descriptors_are_destroyed = false;
+    }
+
+    pub unsafe fn destroy_descriptors(&mut self, device: &ash::Device) {
+        debug_assert!(!self.is_destroyed);
+        debug_assert!(!self.descriptors_are_destroyed);
+
+        device.destroy_descriptor_pool(self.descriptor_pool, None);
+        self.descriptors_are_destroyed = true;
     }
 
     fn init_sampler(context: &VulkanContext) -> VkResult<vk::Sampler> {
@@ -187,6 +229,12 @@ impl Memory {
         &self.index_buffer
     }
 
+    pub fn uniform_buffers(&self) -> &[Buffer; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
+        debug_assert!(!self.is_destroyed);
+
+        &self.uniform_buffers
+    }
+
     pub fn mapped_uniform_buffers(&self) -> &[*mut c_void; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
         debug_assert!(!self.is_destroyed);
 
@@ -195,6 +243,7 @@ impl Memory {
 
     pub fn descriptor_sets(&self) -> &[vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE] {
         debug_assert!(!self.is_destroyed);
+        debug_assert!(!self.descriptors_are_destroyed);
 
         &self.descriptor_sets
     }
@@ -206,7 +255,10 @@ impl Memory {
         }
         self.is_destroyed = true;
 
-        device.destroy_descriptor_pool(self.descriptor_pool, None);
+        if !self.descriptors_are_destroyed {
+            device.destroy_descriptor_pool(self.descriptor_pool, None);
+            self.descriptors_are_destroyed = true;
+        }
         Self::destroy_uniform_buffers(device, &mut self.uniform_buffers);
         self.vertex_buffer.destroy(device);
         self.index_buffer.destroy(device);

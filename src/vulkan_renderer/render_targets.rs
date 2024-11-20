@@ -109,8 +109,15 @@ impl RenderTargets {
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::VERTEX);
 
+        let sampler_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT);
+
         device.create_descriptor_set_layout(
-            &vk::DescriptorSetLayoutCreateInfo::default().bindings(&[ubo_layout_binding]),
+            &vk::DescriptorSetLayoutCreateInfo::default()
+                .bindings(&[ubo_layout_binding, sampler_layout_binding]),
             None,
         )
     }

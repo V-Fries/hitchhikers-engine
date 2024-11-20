@@ -81,20 +81,25 @@ impl Memory {
             Self::destroy_uniform_buffers(context.device(), &mut uniform_buffers)
         });
 
-        let (descriptor_pool, descriptor_sets) =
-            Self::create_descriptors(context, render_targets, &uniform_buffers)?;
-        let descriptor_pool = descriptor_pool.defer(|descriptor_pool| {
-            context
-                .device()
-                .destroy_descriptor_pool(descriptor_pool, None)
-        });
-
         let image = image_parser::Image::try_from(PpmFilePath(PPM_FILE_PATH))?;
         let texture = Image::from_texture_image(context, interface, &image)?
             .defer(|mut texture| texture.destroy(context.device()));
 
         let sampler = Self::init_sampler(context)?
             .defer(|sampler| unsafe { context.device().destroy_sampler(sampler, None) });
+
+        let (descriptor_pool, descriptor_sets) = Self::create_descriptors(
+            context,
+            render_targets,
+            &uniform_buffers,
+            texture.image_view(),
+            *sampler,
+        )?;
+        let descriptor_pool = descriptor_pool.defer(|descriptor_pool| {
+            context
+                .device()
+                .destroy_descriptor_pool(descriptor_pool, None)
+        });
 
         Ok(Self {
             sampler: ScopeGuard::into_inner(sampler),
@@ -114,6 +119,8 @@ impl Memory {
         context: &VulkanContext,
         render_targets: &RenderTargets,
         uniform_buffers: &[Buffer; NB_OF_FRAMES_IN_FLIGHT_USIZE],
+        texture_image_view: vk::ImageView,
+        texture_sampler: vk::Sampler,
     ) -> Result<(
         vk::DescriptorPool,
         [vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE],
@@ -130,6 +137,8 @@ impl Memory {
             render_targets.descriptor_set_layout(),
             *descriptor_pool,
             uniform_buffers,
+            texture_image_view,
+            texture_sampler,
         )?;
 
         Ok((ScopeGuard::into_inner(descriptor_pool), descriptor_sets))
@@ -239,6 +248,18 @@ impl Memory {
         debug_assert!(!self.is_destroyed);
 
         &self.mapped_uniform_buffers
+    }
+
+    pub fn texture(&self) -> &Image {
+        debug_assert!(!self.is_destroyed);
+
+        &self.texture
+    }
+
+    pub fn sampler(&self) -> vk::Sampler {
+        debug_assert!(!self.is_destroyed);
+
+        self.sampler
     }
 
     pub fn descriptor_sets(&self) -> &[vk::DescriptorSet; NB_OF_FRAMES_IN_FLIGHT_USIZE] {

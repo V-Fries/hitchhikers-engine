@@ -352,6 +352,8 @@ impl VulkanRenderer {
                     &self.context,
                     &self.render_targets,
                     self.memory.uniform_buffers(),
+                    self.memory.texture().image_view(),
+                    self.memory.sampler(),
                 )?;
                 self.memory
                     .set_descriptors(descriptor_pool, descriptor_sets);

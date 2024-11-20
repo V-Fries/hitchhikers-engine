@@ -180,6 +180,11 @@ impl Image {
         interface: &VulkanInterface,
         format: vk::Format,
     ) -> VkResult<()> {
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(!self.is_destroyed)
+        }
+
         unsafe {
             self.transition_image_layout(
                 device,
@@ -203,6 +208,11 @@ impl Image {
         interface: &VulkanInterface,
         format: vk::Format,
     ) -> VkResult<()> {
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(!self.is_destroyed)
+        }
+
         unsafe {
             self.transition_image_layout(
                 device,
@@ -226,6 +236,11 @@ impl Image {
         interface: &VulkanInterface,
         info: TransitionImageLayoutInfo,
     ) -> VkResult<()> {
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(!self.is_destroyed)
+        }
+
         let single_time_command = SingleTimeCommand::begin(device, interface)?;
 
         let barrier = vk::ImageMemoryBarrier::default()
@@ -267,6 +282,11 @@ impl Image {
         device: &ash::Device,
         interface: &VulkanInterface,
     ) -> Result<()> {
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(!self.is_destroyed)
+        }
+
         let single_time_command = SingleTimeCommand::begin(device, interface)?;
 
         let region = vk::BufferImageCopy::default()
@@ -295,6 +315,15 @@ impl Image {
 
         single_time_command.submit()?;
         Ok(())
+    }
+
+    pub fn image_view(&self) -> vk::ImageView {
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(!self.is_destroyed)
+        }
+
+        self.image_view
     }
 
     pub unsafe fn destroy(&mut self, device: &ash::Device) {

@@ -83,9 +83,9 @@ impl ShaderCode {
     fn new(shader_file_path: &'static str) -> Result<Self> {
         let mut u8_data = Vec::new();
         File::open(shader_file_path)
-            .map_err(|error| FailedToReadShaderCode::new(shader_file_path, error.into()))?
+            .map_err(|error| FailedToReadShaderCode::new(shader_file_path, error))?
             .read_to_end(&mut u8_data)
-            .map_err(|error| FailedToReadShaderCode::new(shader_file_path, error.into()))?;
+            .map_err(|error| FailedToReadShaderCode::new(shader_file_path, error))?;
 
         if u8_data.len() % 4 != 0 {
             return Err(ShaderCodeBadLen::new(shader_file_path).into());

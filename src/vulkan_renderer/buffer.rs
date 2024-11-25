@@ -6,14 +6,10 @@ use crate::{
 };
 use ash::vk;
 
-use super::{vulkan_context::VulkanContext, vulkan_interface::VulkanInterface};
-
-use crate::error_struct;
-
-error_struct!(
-    FailedToFindMemoryTypeIndex,
-    "Failed to find memory type index when trying to allocate memory for a buffer"
-);
+use super::{
+    memory::Memory, single_time_command::SingleTimeCommand, vulkan_context::VulkanContext,
+    vulkan_interface::VulkanInterface,
+};
 
 pub struct Buffer {
     buffer: vk::Buffer,
@@ -73,39 +69,16 @@ impl Buffer {
             let memory = context.device().allocate_memory(
                 &vk::MemoryAllocateInfo::default()
                     .allocation_size(memory_requirement.size)
-                    .memory_type_index(
-                        Self::find_memory_type_index(
-                            context,
-                            memory_requirement.memory_type_bits,
-                            properties,
-                        )
-                        .ok_or(FailedToFindMemoryTypeIndex {})?,
-                    ),
+                    .memory_type_index(Memory::find_memory_type_index(
+                        context,
+                        memory_requirement.memory_type_bits,
+                        properties,
+                    )?),
                 None,
             )?;
 
             Ok(memory)
         }
-    }
-
-    fn find_memory_type_index(
-        context: &VulkanContext,
-        memory_type_filter: u32,
-        properties: vk::MemoryPropertyFlags,
-    ) -> Option<u32> {
-        unsafe {
-            context
-                .instance()
-                .get_physical_device_memory_properties(context.physical_device())
-        }
-        .memory_types
-        .iter()
-        .enumerate()
-        .find(|(index, memory_type)| {
-            memory_type_filter & (1 << index) != 0
-                && memory_type.property_flags & properties == properties
-        })
-        .map(|(index, _)| index as u32)
     }
 
     pub unsafe fn copy_from_ram<T>(
@@ -158,24 +131,10 @@ impl Buffer {
             debug_assert!(size_to_copy <= self.size - dst_offset);
         }
 
-        let command_buffer = device.allocate_command_buffers(
-            &vk::CommandBufferAllocateInfo::default()
-                .level(vk::CommandBufferLevel::PRIMARY)
-                .command_pool(interface.command_pool())
-                .command_buffer_count(1),
-        )?[0]
-            .defer(|command_buffer| {
-                device.free_command_buffers(interface.command_pool(), &[command_buffer])
-            });
-
-        device.begin_command_buffer(
-            *command_buffer,
-            &vk::CommandBufferBeginInfo::default()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
-        )?;
+        let single_time_command = SingleTimeCommand::begin(device, interface)?;
 
         device.cmd_copy_buffer(
-            *command_buffer,
+            *single_time_command,
             src.buffer,
             self.buffer,
             &[vk::BufferCopy::default()
@@ -184,14 +143,7 @@ impl Buffer {
                 .size(size_to_copy)],
         );
 
-        device.end_command_buffer(*command_buffer)?;
-
-        device.queue_submit(
-            interface.queues().graphics_queue(),
-            &[vk::SubmitInfo::default().command_buffers(&[*command_buffer])],
-            vk::Fence::null(),
-        )?;
-        device.queue_wait_idle(interface.queues().graphics_queue())?;
+        single_time_command.submit()?;
 
         Ok(())
     }

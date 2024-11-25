@@ -15,6 +15,8 @@ type ExtensionName = String;
 
 pub struct PhysicalDeviceData {
     pub physical_device: vk::PhysicalDevice,
+    pub physical_device_properties: vk::PhysicalDeviceProperties,
+    pub physical_device_features: vk::PhysicalDeviceFeatures,
     pub queue_families: QueueFamilies,
     pub swapchain_builder: SwapchainBuilder,
 }
@@ -70,7 +72,7 @@ impl ScoredPhysicalDeviceData {
         let queue_families =
             Self::find_queue_families(instance, surface_instance, surface, device)?;
 
-        Self::check_device_suitability(instance, device)?;
+        Self::check_device_suitability(instance, device, device_features)?;
 
         let swapchain_builder = SwapchainBuilder::new(
             device,
@@ -85,6 +87,8 @@ impl ScoredPhysicalDeviceData {
         Ok(ScoredPhysicalDeviceData {
             physical_device_data: PhysicalDeviceData {
                 physical_device: device,
+                physical_device_properties: device_properties,
+                physical_device_features: device_features,
                 queue_families,
                 swapchain_builder,
             },
@@ -95,8 +99,10 @@ impl ScoredPhysicalDeviceData {
     fn check_device_suitability(
         instance: &ash::Instance,
         device: vk::PhysicalDevice,
+        _device_features: vk::PhysicalDeviceFeatures,
     ) -> Result<()> {
-        Self::check_device_available_extensions(instance, device)
+        Self::check_device_available_extensions(instance, device)?;
+        Ok(())
     }
 
     fn check_device_available_extensions(
@@ -129,12 +135,15 @@ impl ScoredPhysicalDeviceData {
 
     fn score_device(
         device_properties: vk::PhysicalDeviceProperties,
-        _device_features: vk::PhysicalDeviceFeatures,
+        device_features: vk::PhysicalDeviceFeatures,
     ) -> DeviceScore {
         let mut score = DeviceScore(0);
 
         if device_properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
             score.0 += 1000;
+        }
+        if device_features.sampler_anisotropy != 0 {
+            score.0 += 100;
         }
 
         score

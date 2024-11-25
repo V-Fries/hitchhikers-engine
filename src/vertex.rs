@@ -4,24 +4,25 @@ use ash::vk;
 use linear_algebra::Vector;
 
 pub type Vec2 = Vector<f32, 2>;
+pub type Vec3 = Vector<f32, 3>;
 
-pub type Color = Vector<f32, 3>;
+pub type Color = Vec3;
 
 #[repr(C)]
 pub struct Vertex {
-    pos: Vec2,
+    position: Vec3,
     color: Color, // TODO Might remove this
     texture_coordinate: Vec2,
 }
 
 impl Vertex {
     pub fn new(
-        pos: impl Into<Vec2>,
+        position: impl Into<Vec3>,
         color: impl Into<Color>,
         texture_coordinate: impl Into<Vec2>,
     ) -> Self {
         Self {
-            pos: pos.into(),
+            position: position.into(),
             color: color.into(),
             texture_coordinate: texture_coordinate.into(),
         }
@@ -39,8 +40,8 @@ impl Vertex {
             vk::VertexInputAttributeDescription::default()
                 .binding(0)
                 .location(0)
-                .format(vk::Format::R32G32_SFLOAT)
-                .offset(offset_of!(Self, pos) as u32),
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Self, position) as u32),
             vk::VertexInputAttributeDescription::default()
                 .binding(0)
                 .location(1)

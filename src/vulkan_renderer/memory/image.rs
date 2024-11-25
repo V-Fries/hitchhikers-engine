@@ -28,14 +28,14 @@ struct TransitionImageLayoutInfo {
 impl Image {
     pub fn new(
         context: &VulkanContext,
-        width: u32,
-        height: u32,
+        extent: vk::Extent2D,
         format: vk::Format,
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
         properties: vk::MemoryPropertyFlags,
+        aspect_mask: vk::ImageAspectFlags,
     ) -> Result<Self> {
-        let image = Self::init_image(context.device(), width, height, format, tiling, usage)?
+        let image = Self::init_image(context.device(), extent, format, tiling, usage)?
             .defer(|image| unsafe { context.device().destroy_image(image, None) });
 
         let memory = Self::init_memory(context, *image, properties)?
@@ -44,10 +44,9 @@ impl Image {
         unsafe { context.device().bind_image_memory(*image, *memory, 0)? };
 
         let image_view =
-            unsafe { Self::init_image_view(context.device(), *image, vk::Format::R8G8B8A8_SRGB)? }
-                .defer(|image_view| unsafe {
-                    context.device().destroy_image_view(image_view, None)
-                });
+            unsafe { Self::init_image_view(context.device(), *image, format, aspect_mask)? }.defer(
+                |image_view| unsafe { context.device().destroy_image_view(image_view, None) },
+            );
 
         Ok(Self {
             image_view: ScopeGuard::into_inner(image_view),
@@ -60,15 +59,19 @@ impl Image {
 
     fn init_image(
         device: &ash::Device,
-        width: u32,
-        height: u32,
+        extent: vk::Extent2D,
         format: vk::Format,
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
     ) -> VkResult<vk::Image> {
         let image_create_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
-            .extent(vk::Extent3D::default().width(width).height(height).depth(1))
+            .extent(
+                vk::Extent3D::default()
+                    .width(extent.width)
+                    .height(extent.height)
+                    .depth(1),
+            )
             .mip_levels(1)
             .array_layers(1)
             .format(format)
@@ -101,6 +104,7 @@ impl Image {
         device: &ash::Device,
         image: vk::Image,
         format: vk::Format,
+        aspect_mask: vk::ImageAspectFlags,
     ) -> VkResult<vk::ImageView> {
         device.create_image_view(
             &vk::ImageViewCreateInfo::default()
@@ -109,7 +113,7 @@ impl Image {
                 .format(format)
                 .subresource_range(
                     vk::ImageSubresourceRange::default()
-                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .aspect_mask(aspect_mask)
                         .base_mip_level(0)
                         .level_count(1)
                         .base_array_layer(0)
@@ -138,12 +142,15 @@ impl Image {
 
         let image = Self::new(
             context,
-            texture.width() as u32,
-            texture.height() as u32,
+            vk::Extent2D {
+                width: texture.width() as u32,
+                height: texture.height() as u32,
+            },
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            vk::ImageAspectFlags::COLOR,
         )?
         .defer(|mut image| unsafe { image.destroy(context.device()) });
 
@@ -324,6 +331,33 @@ impl Image {
         }
 
         self.image_view
+    }
+
+    pub fn find_supported_format(
+        context: &VulkanContext,
+        candidates: &[vk::Format],
+        tiling: vk::ImageTiling,
+        features: vk::FormatFeatureFlags,
+    ) -> Option<vk::Format> {
+        for format in candidates {
+            let format_properties = unsafe {
+                context
+                    .instance()
+                    .get_physical_device_format_properties(context.physical_device(), *format)
+            };
+
+            if tiling == vk::ImageTiling::LINEAR
+                && (format_properties.linear_tiling_features & features) == features
+            {
+                return Some(*format);
+            }
+            if tiling == vk::ImageTiling::OPTIMAL
+                && (format_properties.optimal_tiling_features & features) == features
+            {
+                return Some(*format);
+            }
+        }
+        None
     }
 
     pub unsafe fn destroy(&mut self, device: &ash::Device) {

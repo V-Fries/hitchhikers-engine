@@ -1,5 +1,6 @@
 mod color_blending;
 mod create_graphics_pipeline;
+mod depth_stencil_state_create_info;
 mod dynamic_state;
 mod input_assembly;
 mod multisampling;

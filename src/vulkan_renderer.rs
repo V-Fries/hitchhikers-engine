@@ -190,12 +190,16 @@ impl VulkanRenderer {
             .device()
             .begin_command_buffer(command_buffer, &begin_info)?;
 
-        let clear_values = [vk::ClearValue {
-            // TODO check if I should use float32
-            color: vk::ClearColorValue {
-                uint32: [0, 0, 0, 1],
+        let clear_values = [
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0., 0., 0., 1.],
+                },
             },
-        }];
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue::default().depth(1.).stencil(0),
+            },
+        ];
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
             .render_pass(self.render_targets.render_pass())
             .framebuffer(self.render_targets.framebuffers()[image_index as usize])

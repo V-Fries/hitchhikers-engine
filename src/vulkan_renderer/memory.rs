@@ -34,10 +34,10 @@ error_struct!(
 // TODO remove this
 pub static VERTICES: LazyLock<[Vertex; 4]> = LazyLock::new(|| {
     [
-        Vertex::new([-0.5, -0.5], [1.0, 0.0, 0.0]),
-        Vertex::new([0.5, -0.5], [0.0, 1.0, 0.0]),
-        Vertex::new([0.5, 0.5], [0.0, 0.0, 1.0]),
-        Vertex::new([-0.5, 0.5], [1.0, 1.0, 1.0]),
+        Vertex::new([-0.5, -0.5], [1.0, 0.0, 0.0], [1., 0.]),
+        Vertex::new([0.5, -0.5], [0.0, 1.0, 0.0], [0., 0.]),
+        Vertex::new([0.5, 0.5], [0.0, 0.0, 1.0], [0., 1.]),
+        Vertex::new([-0.5, 0.5], [1.0, 1.0, 1.0], [1., 1.]),
     ]
 });
 

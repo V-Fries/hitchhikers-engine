@@ -10,14 +10,20 @@ pub type Color = Vector<f32, 3>;
 #[repr(C)]
 pub struct Vertex {
     pos: Vec2,
-    color: Color,
+    color: Color, // TODO Might remove this
+    texture_coordinate: Vec2,
 }
 
 impl Vertex {
-    pub fn new(pos: impl Into<Vec2>, color: impl Into<Color>) -> Self {
+    pub fn new(
+        pos: impl Into<Vec2>,
+        color: impl Into<Color>,
+        texture_coordinate: impl Into<Vec2>,
+    ) -> Self {
         Self {
             pos: pos.into(),
             color: color.into(),
+            texture_coordinate: texture_coordinate.into(),
         }
     }
 
@@ -28,7 +34,7 @@ impl Vertex {
             .input_rate(vk::VertexInputRate::VERTEX)
     }
 
-    pub fn get_attributes_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
+    pub fn get_attributes_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
         [
             vk::VertexInputAttributeDescription::default()
                 .binding(0)
@@ -40,6 +46,11 @@ impl Vertex {
                 .location(1)
                 .format(vk::Format::R32G32B32_SFLOAT)
                 .offset(offset_of!(Self, color) as u32),
+            vk::VertexInputAttributeDescription::default()
+                .binding(0)
+                .location(2)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(offset_of!(Self, texture_coordinate) as u32),
         ]
     }
 }

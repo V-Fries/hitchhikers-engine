@@ -2,7 +2,7 @@ use ash::vk;
 
 pub fn vertex_input_state_create_info<'a>(
     binding_descriptions: &'a [vk::VertexInputBindingDescription],
-    attributes_description: &'a [vk::VertexInputAttributeDescription; 2],
+    attributes_description: &'a [vk::VertexInputAttributeDescription],
 ) -> vk::PipelineVertexInputStateCreateInfo<'a> {
     vk::PipelineVertexInputStateCreateInfo::default()
         .vertex_binding_descriptions(binding_descriptions)

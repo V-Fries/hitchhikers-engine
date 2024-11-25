@@ -7,11 +7,12 @@ pub unsafe fn create_framebuffers(
     render_pass: vk::RenderPass,
     swapchain_extent: vk::Extent2D,
     swapchain_image_views: &[vk::ImageView],
+    depth_buffer_image_view: vk::ImageView,
 ) -> Result<Box<[vk::Framebuffer]>> {
     let mut framebuffers = Vec::with_capacity(swapchain_image_views.len());
 
-    for image in swapchain_image_views {
-        let attachments = [*image];
+    for image_view in swapchain_image_views {
+        let attachments = [*image_view, depth_buffer_image_view];
         let create_info = vk::FramebufferCreateInfo::default()
             .render_pass(render_pass)
             .attachments(&attachments)

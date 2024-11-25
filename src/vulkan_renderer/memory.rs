@@ -23,7 +23,7 @@ use create_uniform_buffers::create_uniform_buffers;
 use create_vertex_buffer::create_vertex_buffer;
 use descriptors::create_descriptor_pool;
 use descriptors::create_descriptor_sets;
-use image::Image;
+pub use image::Image;
 use image_parser::ppm::PpmFilePath;
 
 error_struct!(
@@ -32,17 +32,21 @@ error_struct!(
 );
 
 // TODO remove this
-pub static VERTICES: LazyLock<[Vertex; 4]> = LazyLock::new(|| {
+pub static VERTICES: LazyLock<[Vertex; 8]> = LazyLock::new(|| {
     [
-        Vertex::new([-0.5, -0.5], [1.0, 0.0, 0.0], [1., 0.]),
-        Vertex::new([0.5, -0.5], [0.0, 1.0, 0.0], [0., 0.]),
-        Vertex::new([0.5, 0.5], [0.0, 0.0, 1.0], [0., 1.]),
-        Vertex::new([-0.5, 0.5], [1.0, 1.0, 1.0], [1., 1.]),
+        Vertex::new([-0.5, -0.5, 0.], [1.0, 0.0, 0.0], [1., 0.]),
+        Vertex::new([0.5, -0.5, 0.], [0.0, 1.0, 0.0], [0., 0.]),
+        Vertex::new([0.5, 0.5, 0.], [0.0, 0.0, 1.0], [0., 1.]),
+        Vertex::new([-0.5, 0.5, 0.], [1.0, 1.0, 1.0], [1., 1.]),
+        Vertex::new([-0.5, -0.5, -0.5], [1.0, 0.0, 0.0], [1., 0.]),
+        Vertex::new([0.5, -0.5, -0.5], [0.0, 1.0, 0.0], [0., 0.]),
+        Vertex::new([0.5, 0.5, -0.5], [0.0, 0.0, 1.0], [0., 1.]),
+        Vertex::new([-0.5, 0.5, -0.5], [1.0, 1.0, 1.0], [1., 1.]),
     ]
 });
 
 // TODO remove this
-pub static INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
+pub static INDICES: [u16; 12] = [0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
 
 // TODO remove this
 pub const PPM_FILE_PATH: &str = "assets/textures/test.ppm";

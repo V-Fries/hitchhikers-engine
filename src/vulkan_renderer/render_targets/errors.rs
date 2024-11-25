@@ -12,3 +12,8 @@ error_struct!(ShaderCodeBadLen {
 error_struct!(FailedToCreatePipeline {
     error: (Vec<ash::vk::Pipeline>, ash::vk::Result),
 }, "Failed to create pipeline: {:?}", error);
+
+error_struct!(
+    FailedToFindSupportedFormatForDepthBuffer,
+    "No supported format for depth buffer",
+);

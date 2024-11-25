@@ -1,3 +1,4 @@
+mod create_depth_buffer;
 mod create_framebuffers;
 mod create_render_pass;
 mod errors;
@@ -6,12 +7,16 @@ mod image_views;
 
 use crate::utils::{Defer, Result, ScopeGuard};
 use ash::{prelude::VkResult, vk};
+use create_depth_buffer::create_depth_buffer;
 use create_framebuffers::create_framebuffers;
 use create_render_pass::create_render_pass;
 use graphics_pipeline::create_graphics_pipeline;
 use image_views::create_image_views;
 
-use super::vulkan_context::{SwapchainBuilder, VulkanContext};
+use super::{
+    memory::Image,
+    vulkan_context::{SwapchainBuilder, VulkanContext},
+};
 
 pub struct RenderTargets {
     is_destroyed: bool,
@@ -29,6 +34,8 @@ pub struct RenderTargets {
     descriptor_set_layout: vk::DescriptorSetLayout,
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
+
+    depth_buffer: Image,
 
     framebuffers: Box<[vk::Framebuffer]>,
 }
@@ -53,7 +60,7 @@ impl RenderTargets {
             create_image_views(context.device(), &swapchain_images, swapchain_format)?
                 .defer(|image_views| Self::destroy_image_views(&image_views, context));
 
-        let render_pass = create_render_pass(context.device(), swapchain_format)?
+        let render_pass = create_render_pass(context, swapchain_format)?
             .defer(|render_pass| context.device().destroy_render_pass(render_pass, None));
 
         let descriptor_set_layout =
@@ -76,16 +83,21 @@ impl RenderTargets {
         });
         let pipeline = pipeline.defer(|pipeline| context.device().destroy_pipeline(pipeline, None));
 
+        let depth_buffer = create_depth_buffer(context, swapchain_extent)?
+            .defer(|mut depth_buffer| depth_buffer.destroy(context.device()));
+
         let framebuffers = create_framebuffers(
             context.device(),
             *render_pass,
             swapchain_extent,
             &swapchain_image_views,
+            depth_buffer.image_view(),
         )?
         .defer(|framebuffers| Self::destroy_framebuffers(&framebuffers, context));
 
         Ok(RenderTargets {
             framebuffers: ScopeGuard::into_inner(framebuffers),
+            depth_buffer: ScopeGuard::into_inner(depth_buffer),
             pipeline: ScopeGuard::into_inner(pipeline),
             pipeline_layout: ScopeGuard::into_inner(pipeline_layout),
             descriptor_set_layout: ScopeGuard::into_inner(descriptor_set_layout),
@@ -190,6 +202,7 @@ impl RenderTargets {
         self.is_destroyed = true;
 
         Self::destroy_framebuffers(&self.framebuffers, context);
+        self.depth_buffer.destroy(context.device());
         context.device().destroy_pipeline(self.pipeline, None);
         context
             .device()

@@ -1,5 +1,6 @@
 use super::super::errors::FailedToCreatePipeline;
 use super::color_blending::ColorBlendStateCreateInfo;
+use super::depth_stencil_state_create_info::depth_stencil_state_create_info;
 use super::dynamic_state::DynamicStateCreateInfo;
 use super::input_assembly::input_assembly_state_create_info;
 use super::multisampling::multisample_state_create_info;
@@ -18,7 +19,6 @@ pub unsafe fn create_graphics_pipeline(
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
 ) -> Result<(vk::PipelineLayout, vk::Pipeline)> {
-    // TODO refactor
     let shader_stage_create_infos = ShaderStageCreateInfos::new(device)?;
     let binding_descriptions = [Vertex::get_binding_description()];
     let attributes_description = Vertex::get_attributes_descriptions();
@@ -30,6 +30,7 @@ pub unsafe fn create_graphics_pipeline(
     let multisample_state_create_info = multisample_state_create_info();
     let color_blend_state_create_info = ColorBlendStateCreateInfo::new();
     let dynamic_state_create_info = DynamicStateCreateInfo::new();
+    let depth_stencil_state_create_info = depth_stencil_state_create_info();
     let pipeline_layout = create_pipeline_layout(device, descriptor_set_layout)?;
 
     let create_infos = [vk::GraphicsPipelineCreateInfo::default()
@@ -41,6 +42,7 @@ pub unsafe fn create_graphics_pipeline(
         .multisample_state(&multisample_state_create_info)
         .color_blend_state(color_blend_state_create_info.create_info())
         .dynamic_state(dynamic_state_create_info.create_info())
+        .depth_stencil_state(&depth_stencil_state_create_info)
         .layout(pipeline_layout)
         .render_pass(render_pass)
         .subpass(0)];

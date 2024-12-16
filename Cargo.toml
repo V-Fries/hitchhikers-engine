@@ -13,8 +13,11 @@ members = [
 validation_layers = []
 
 [dependencies]
-linear_algebra = { path = "./crates/linear_algebra" }
+linear-algebra = { path = "./crates/linear_algebra" }
 image-parser = { path = "./crates/image-parser" }
+
+# Utilities
+rs42 = "0.2.0"
 
 # Vulkan wrapper
 ash = "0.38.0"

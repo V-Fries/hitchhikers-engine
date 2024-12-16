@@ -1,7 +1,7 @@
 use super::SyncObjects;
-use crate::utils::{Result, TakeVec};
 use ash::vk;
-use std::convert::TryInto;
+use rs42::{extensions::PipeLine, Result};
+use std::{convert::TryInto, mem};
 
 pub struct SyncObjectsBuilder<'a> {
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -25,19 +25,19 @@ impl<'a> SyncObjectsBuilder<'a> {
         Ok(SyncObjects {
             image_available_semaphores: self
                 .image_available_semaphores
-                .take()
+                .pipe_ref_mut(mem::take)
                 .as_slice()
                 .try_into()
                 .expect("image_available_semaphores was not initialized"),
             render_finished_semaphores: self
                 .render_finished_semaphores
-                .take()
+                .pipe_ref_mut(mem::take)
                 .as_slice()
                 .try_into()
                 .expect("render_finished_semaphores was not initialized"),
             in_flight_fences: self
                 .in_flight_fences
-                .take()
+                .pipe_ref_mut(mem::take)
                 .as_slice()
                 .try_into()
                 .expect("in_flight_fences was not initialized"),

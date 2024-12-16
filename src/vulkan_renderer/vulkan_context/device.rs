@@ -4,8 +4,8 @@ mod swapchain_builder;
 use ash::vk;
 use std::ffi::c_char;
 
-use crate::utils::{PipeLine, Result};
 pub use physical_device::PhysicalDeviceData;
+use rs42::{extensions::PipeLine, Result};
 pub use swapchain_builder::SwapchainBuilder;
 
 pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[

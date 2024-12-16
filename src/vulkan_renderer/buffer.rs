@@ -1,10 +1,11 @@
 use std::{ffi::c_void, ptr::copy_nonoverlapping};
 
-use crate::{
-    defer,
-    utils::{Defer, Result, ScopeGuard},
-};
 use ash::vk;
+use rs42::{
+    defer,
+    scope_guard::{Defer, ScopeGuard},
+    Result,
+};
 
 use super::{
     memory::Memory, single_time_command::SingleTimeCommand, vulkan_context::VulkanContext,

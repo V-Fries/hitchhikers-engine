@@ -2,9 +2,12 @@ use ash::prelude::VkResult;
 use ash::vk;
 use std::collections::HashSet;
 
-use crate::utils::{GetAllUniques, PipeLine, Result};
 use crate::vulkan_renderer::vulkan_context::errors::PhysicalDeviceIsNotSuitable;
 use crate::vulkan_renderer::vulkan_context::queue_families::QueueFamilies;
+use rs42::{
+    extensions::{iterator::GetAllUniques, PipeLine},
+    Result,
+};
 
 // Sorted in order of preference
 const PREFERRED_FORMATS: &[vk::SurfaceFormatKHR] = &[vk::SurfaceFormatKHR {

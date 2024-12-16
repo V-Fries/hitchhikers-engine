@@ -1,6 +1,5 @@
 mod app;
 mod engine;
-mod utils;
 mod vertex;
 mod vulkan_renderer;
 

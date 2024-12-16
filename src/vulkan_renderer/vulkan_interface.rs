@@ -5,12 +5,15 @@ mod sync_objects;
 
 use super::vulkan_context::{QueueFamilies, VulkanContext};
 use super::NB_OF_FRAMES_IN_FLIGHT;
-use crate::utils::{Defer, Result, ScopeGuard};
 use crate::vulkan_renderer::NB_OF_FRAMES_IN_FLIGHT_USIZE;
 use ash::vk;
 use create_command_buffers::create_command_buffers;
 use create_command_pool::create_command_pool;
 use queue::Queues;
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
+};
 pub use sync_objects::SyncObjects;
 
 pub struct VulkanInterface {

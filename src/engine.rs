@@ -1,10 +1,10 @@
 mod errors;
 
-use crate::const_str_to_cstr;
 use crate::engine::errors::{FailedToCreateWindow, FailedToInitVulkan};
-use crate::utils::Result;
 use crate::vulkan_renderer::VulkanRenderer;
 use ash::vk;
+use rs42::const_str_to_cstr;
+use rs42::Result;
 use std::ffi::CStr;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;

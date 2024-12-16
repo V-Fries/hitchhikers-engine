@@ -1,9 +1,9 @@
 use ash::{prelude::VkResult, vk};
 
-use crate::utils::{PipeLine, Result};
 use crate::vulkan_renderer::buffer::Buffer;
 use crate::vulkan_renderer::uniform_buffer_object::UniformBufferObject;
 use crate::vulkan_renderer::{NB_OF_FRAMES_IN_FLIGHT, NB_OF_FRAMES_IN_FLIGHT_USIZE};
+use rs42::{extensions::PipeLine, Result};
 
 use super::errors::FailedToConvertDescriptorSetsVecToArray;
 

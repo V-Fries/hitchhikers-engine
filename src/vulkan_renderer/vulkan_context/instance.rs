@@ -2,8 +2,11 @@ use super::errors::ExtensionNotFound;
 use super::validation_layers::VALIDATION_LAYERS;
 use super::validation_layers::{check_validation_layers, create_debug_messenger};
 use crate::engine::{ENGINE_NAME_CSTR, ENGINE_VERSION};
-use crate::utils::{Defer, Result, ScopeGuard};
 use ash::vk;
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
+};
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr, CString};

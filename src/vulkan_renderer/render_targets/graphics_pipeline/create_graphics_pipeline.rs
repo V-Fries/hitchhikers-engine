@@ -9,9 +9,9 @@ use super::rasterizer::rasterizer_state_create_info;
 use super::shader::ShaderStageCreateInfos;
 use super::vertex_input::vertex_input_state_create_info;
 use super::viewport::ViewportStateCreateInfo;
-use crate::utils::Result;
 use crate::vertex::Vertex;
 use ash::vk;
+use rs42::Result;
 
 pub unsafe fn create_graphics_pipeline(
     device: &ash::Device,

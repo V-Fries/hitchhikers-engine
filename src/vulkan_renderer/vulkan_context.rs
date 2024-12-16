@@ -4,11 +4,14 @@ mod instance;
 mod queue_families;
 mod validation_layers;
 
-use crate::utils::{Defer, Result, ScopeGuard};
 use ash::{prelude::VkResult, vk};
 pub use device::{create_device, PhysicalDeviceData, SwapchainBuilder};
 use instance::create_instance;
 pub use queue_families::QueueFamilies;
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
+};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 pub struct VulkanContext {

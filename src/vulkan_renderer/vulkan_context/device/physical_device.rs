@@ -7,9 +7,9 @@ use std::ffi::CStr;
 use ash::vk;
 
 use super::super::device::REQUIRED_EXTENSIONS;
-use crate::utils::Result;
 use crate::vulkan_renderer::vulkan_context::device::swapchain_builder::SwapchainBuilder;
 use crate::vulkan_renderer::vulkan_context::queue_families::{QueueFamilies, QueueFamiliesBuilder};
+use rs42::Result;
 
 type ExtensionName = String;
 

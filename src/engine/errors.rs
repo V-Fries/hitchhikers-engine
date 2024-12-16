@@ -1,6 +1,6 @@
-use crate::error_struct;
+use rs42::error_struct_custom_display;
 
-error_struct!(
+error_struct_custom_display!(
     FailedToCreateWindow {
         err: winit::error::OsError,
     },
@@ -8,6 +8,6 @@ error_struct!(
     err
 );
 
-error_struct!(FailedToInitVulkan {
+error_struct_custom_display!(FailedToInitVulkan {
     err: Box<dyn std::error::Error>,
 }, "Failed to init vulkan: {}", err);

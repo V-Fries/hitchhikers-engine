@@ -5,13 +5,16 @@ mod errors;
 mod graphics_pipeline;
 mod image_views;
 
-use crate::utils::{Defer, Result, ScopeGuard};
 use ash::{prelude::VkResult, vk};
 use create_depth_buffer::create_depth_buffer;
 use create_framebuffers::create_framebuffers;
 use create_render_pass::create_render_pass;
 use graphics_pipeline::create_graphics_pipeline;
 use image_views::create_image_views;
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
+};
 
 use super::{
     memory::Image,

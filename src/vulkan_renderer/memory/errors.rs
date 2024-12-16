@@ -1,6 +1,6 @@
-use crate::error_struct;
+use rs42::error_struct_custom_display;
 
-error_struct!(
+error_struct_custom_display!(
     FailedToConvertDescriptorSetsVecToArray {
         vec_len: usize,
         expected_len: usize,

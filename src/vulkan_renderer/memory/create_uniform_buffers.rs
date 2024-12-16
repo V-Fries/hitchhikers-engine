@@ -5,13 +5,11 @@ use std::{
 
 use ash::{prelude::VkResult, vk};
 
-use crate::{
-    utils::{PipeLine, Result},
-    vulkan_renderer::{
-        buffer::Buffer, uniform_buffer_object::UniformBufferObject, vulkan_context::VulkanContext,
-        NB_OF_FRAMES_IN_FLIGHT_USIZE,
-    },
+use crate::vulkan_renderer::{
+    buffer::Buffer, uniform_buffer_object::UniformBufferObject, vulkan_context::VulkanContext,
+    NB_OF_FRAMES_IN_FLIGHT_USIZE,
 };
+use rs42::{extensions::PipeLine, Result};
 
 const BUFFER_SIZE: vk::DeviceSize = size_of::<UniformBufferObject>() as vk::DeviceSize;
 

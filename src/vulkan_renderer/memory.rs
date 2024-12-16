@@ -7,16 +7,17 @@ mod image;
 
 use std::{ffi::c_void, sync::LazyLock};
 
-use crate::{
-    utils::{Defer, Result, ScopeGuard},
-    vertex::Vertex,
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
 };
+
+use crate::vertex::Vertex;
 
 use super::{
     buffer::Buffer, render_targets::RenderTargets, vulkan_context::VulkanContext,
     vulkan_interface::VulkanInterface, NB_OF_FRAMES_IN_FLIGHT_USIZE,
 };
-use crate::error_struct;
 use ash::{prelude::VkResult, vk};
 use create_index_buffer::create_index_buffer;
 use create_uniform_buffers::create_uniform_buffers;
@@ -25,8 +26,9 @@ use descriptors::create_descriptor_pool;
 use descriptors::create_descriptor_sets;
 pub use image::Image;
 use image_parser::ppm::PpmFilePath;
+use rs42::error_struct_custom_display;
 
-error_struct!(
+error_struct_custom_display!(
     FailedToFindMemoryTypeIndex,
     "Failed to find memory type index when trying to allocate memory for a buffer"
 );

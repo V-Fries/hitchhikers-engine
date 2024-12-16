@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use ash::{prelude::VkResult, vk};
 
-use crate::utils::{Defer, ScopeGuard};
+use rs42::scope_guard::{Defer, ScopeGuard};
 
 use super::vulkan_interface::VulkanInterface;
 

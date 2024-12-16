@@ -1,11 +1,12 @@
 use ash::vk;
 
-use crate::{
-    utils::{Defer, Result, ScopeGuard},
-    vulkan_renderer::{
-        buffer::Buffer, memory::INDICES, vulkan_context::VulkanContext,
-        vulkan_interface::VulkanInterface,
-    },
+use crate::vulkan_renderer::{
+    buffer::Buffer, memory::INDICES, vulkan_context::VulkanContext,
+    vulkan_interface::VulkanInterface,
+};
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
 };
 
 pub unsafe fn create_index_buffer(

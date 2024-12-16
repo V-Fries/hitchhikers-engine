@@ -1,6 +1,6 @@
 use ash::vk;
 
-use crate::utils::Result;
+use rs42::Result;
 
 pub unsafe fn create_framebuffers(
     device: &ash::Device,

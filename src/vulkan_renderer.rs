@@ -8,11 +8,14 @@ mod vulkan_interface;
 
 use std::{ptr::copy_nonoverlapping, time::SystemTime};
 
-use crate::utils::{Defer, Result, ScopeGuard};
 use ash::{prelude::VkResult, vk};
 use linear_algebra::{Degree, Matrix};
 use memory::{Memory, INDICES};
 use render_targets::RenderTargets;
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
+};
 use uniform_buffer_object::UniformBufferObject;
 use vulkan_context::{create_device, PhysicalDeviceData, SwapchainBuilder, VulkanContext};
 use vulkan_interface::VulkanInterface;

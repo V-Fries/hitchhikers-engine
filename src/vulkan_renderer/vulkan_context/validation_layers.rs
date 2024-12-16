@@ -1,5 +1,5 @@
-use crate::utils::Result;
 use ash::vk;
+use rs42::Result;
 
 use super::errors::ValidationLayerNotFound;
 use std::collections::HashSet;

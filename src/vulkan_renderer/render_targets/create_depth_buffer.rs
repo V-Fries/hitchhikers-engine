@@ -1,9 +1,7 @@
 use ash::vk;
 
-use crate::{
-    utils::Result,
-    vulkan_renderer::{memory::Image, vulkan_context::VulkanContext},
-};
+use crate::vulkan_renderer::{memory::Image, vulkan_context::VulkanContext};
+use rs42::Result;
 
 use super::errors::FailedToFindSupportedFormatForDepthBuffer;
 

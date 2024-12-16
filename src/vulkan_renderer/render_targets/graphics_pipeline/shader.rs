@@ -1,8 +1,7 @@
 use super::super::errors::{FailedToReadShaderCode, ShaderCodeBadLen};
-use crate::utils::{PipeLine, Result};
 use ash::vk;
-use std::fs::File;
-use std::io::Read;
+use rs42::{extensions::PipeLine, Result};
+use std::{fs::File, io::Read};
 
 const VERT_SHADER_PATH: &str = "./shaders/build/shader.vert.spv";
 const FRAG_SHADER_PATH: &str = "./shaders/build/shader.frag.spv";

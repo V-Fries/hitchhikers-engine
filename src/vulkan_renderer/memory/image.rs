@@ -1,11 +1,12 @@
-use crate::{
-    utils::{Defer, Result, ScopeGuard},
-    vulkan_renderer::{
-        buffer::Buffer, memory::Memory, single_time_command::SingleTimeCommand,
-        vulkan_context::VulkanContext, vulkan_interface::VulkanInterface,
-    },
+use crate::vulkan_renderer::{
+    buffer::Buffer, memory::Memory, single_time_command::SingleTimeCommand,
+    vulkan_context::VulkanContext, vulkan_interface::VulkanInterface,
 };
 use ash::{prelude::VkResult, vk};
+use rs42::{
+    scope_guard::{Defer, ScopeGuard},
+    Result,
+};
 
 pub struct Image {
     image: vk::Image,

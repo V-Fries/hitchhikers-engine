@@ -1,8 +1,6 @@
-use crate::{
-    utils::Result,
-    vulkan_renderer::{NB_OF_FRAMES_IN_FLIGHT, NB_OF_FRAMES_IN_FLIGHT_USIZE},
-};
+use crate::vulkan_renderer::{NB_OF_FRAMES_IN_FLIGHT, NB_OF_FRAMES_IN_FLIGHT_USIZE};
 use ash::vk;
+use rs42::Result;
 
 pub unsafe fn create_command_buffers(
     device: &ash::Device,

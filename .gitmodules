@@ -1,6 +1,6 @@
-[submodule "linear_algebra"]
-	path = crates/linear_algebra
-	url = git@github.com:V-Fries/42-matrix.git
 [submodule "crates/image-parser"]
 	path = crates/image-parser
 	url = git@github.com:V-Fries/image-parser-rs.git
+[submodule "crates/linear-algebra"]
+	path = crates/linear-algebra
+	url = git@github.com:V-Fries/42-matrix.git

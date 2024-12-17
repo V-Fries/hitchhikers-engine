@@ -5,7 +5,7 @@ edition = "2021"
 
 [workspace]
 members = [
-    "crates/linear_algebra",
+    "crates/linear-algebra",
     "crates/image-parser",
 ]
 
@@ -13,7 +13,7 @@ members = [
 validation_layers = []
 
 [dependencies]
-linear-algebra = { path = "./crates/linear_algebra" }
+linear-algebra = { path = "./crates/linear-algebra" }
 image-parser = { path = "./crates/image-parser" }
 
 # Utilities

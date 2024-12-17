@@ -420,6 +420,7 @@ dependencies = [
  "ash-window",
  "image-parser",
  "linear-algebra",
+ "object-parser",
  "rs42",
  "winit",
 ]
@@ -806,6 +807,14 @@ dependencies = [
  "objc2",
  "objc2-core-location",
  "objc2-foundation",
+]
+
+[[package]]
+name = "object-parser"
+version = "0.1.0"
+dependencies = [
+ "linear-algebra",
+ "rs42",
 ]
 
 [[package]]

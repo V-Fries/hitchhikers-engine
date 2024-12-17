@@ -1,0 +1,10 @@
+[package]
+name = "object-parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+linear-algebra = { path = "../linear-algebra" }
+
+# Utilities
+rs42 = "0.2.0"

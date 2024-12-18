@@ -1,8 +1,7 @@
 use ash::vk;
 
 use crate::vulkan_renderer::{
-    buffer::Buffer, memory::INDICES, vulkan_context::VulkanContext,
-    vulkan_interface::VulkanInterface,
+    buffer::Buffer, vulkan_context::VulkanContext, vulkan_interface::VulkanInterface,
 };
 use rs42::{
     scope_guard::{Defer, ScopeGuard},
@@ -12,8 +11,9 @@ use rs42::{
 pub unsafe fn create_index_buffer(
     context: &VulkanContext,
     interface: &VulkanInterface,
+    indices: &[u32],
 ) -> Result<Buffer> {
-    let buffer_size = (size_of_val(&INDICES[0]) * INDICES.len()) as vk::DeviceSize;
+    let buffer_size = (size_of_val(&indices[0]) * indices.len()) as vk::DeviceSize;
 
     let staging_buffer = Buffer::new(
         context,
@@ -24,7 +24,7 @@ pub unsafe fn create_index_buffer(
     )?
     .defer(|mut staging_buffer| unsafe { staging_buffer.destroy(context.device()) });
 
-    unsafe { staging_buffer.copy_from_ram(0, &INDICES, context.device())? }
+    unsafe { staging_buffer.copy_from_ram(0, indices, context.device())? }
 
     let index_buffer = Buffer::new(
         context,

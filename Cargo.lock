@@ -420,6 +420,7 @@ dependencies = [
  "ash-window",
  "image-parser",
  "linear-algebra",
+ "model",
  "rs42",
  "winit",
 ]
@@ -543,6 +544,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe751422e4a8caa417e13c3ea66452215d7d63e19e604f4980461212f3ae1322"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "model"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "linear-algebra",
+ "rs42",
 ]
 
 [[package]]

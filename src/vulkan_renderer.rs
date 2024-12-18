@@ -10,7 +10,7 @@ use std::{ptr::copy_nonoverlapping, time::SystemTime};
 
 use ash::{prelude::VkResult, vk};
 use linear_algebra::{Degree, Matrix};
-use memory::{Memory, INDICES};
+use memory::Memory;
 use render_targets::RenderTargets;
 use rs42::{
     scope_guard::{Defer, ScopeGuard},
@@ -114,7 +114,7 @@ impl VulkanRenderer {
         };
         self.previous_frame_start_time = current_time;
 
-        *self.rotation += 90. * elapsed_time_sec;
+        *self.rotation += 45. * elapsed_time_sec;
 
         let aspect_ratio = self.render_targets.swapchain_extent().width as f32
             / self.render_targets.swapchain_extent().height as f32;
@@ -233,7 +233,7 @@ impl VulkanRenderer {
             command_buffer,
             self.memory.index_buffer().buffer(),
             0,
-            vk::IndexType::UINT16,
+            vk::IndexType::UINT32,
         );
 
         let viewports = [vk::Viewport::default()
@@ -260,9 +260,14 @@ impl VulkanRenderer {
             &[self.memory.descriptor_sets()[self.current_frame]],
             &[],
         );
-        self.context
-            .device()
-            .cmd_draw_indexed(command_buffer, INDICES.len() as u32, 1, 0, 0, 0);
+        self.context.device().cmd_draw_indexed(
+            command_buffer,
+            self.memory.index_buffer_len(),
+            1,
+            0,
+            0,
+            0,
+        );
         self.context.device().cmd_end_render_pass(command_buffer);
         self.context.device().end_command_buffer(command_buffer)?;
         Ok(())

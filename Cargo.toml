@@ -7,6 +7,7 @@ edition = "2021"
 members = [
     "crates/linear-algebra",
     "crates/image-parser",
+    "crates/model",
 ]
 
 [features]
@@ -15,6 +16,7 @@ validation_layers = []
 [dependencies]
 linear-algebra = { path = "./crates/linear-algebra" }
 image-parser = { path = "./crates/image-parser" }
+model = { path = "./crates/model" }
 
 # Utilities
 rs42 = "0.2.0"

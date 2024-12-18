@@ -1,5 +1,5 @@
 use ash::vk;
-use object_parser::Vertex;
+use model::Vertex;
 
 use crate::vulkan_renderer::{
     buffer::Buffer, vulkan_context::VulkanContext, vulkan_interface::VulkanInterface,

@@ -10,7 +10,7 @@ use super::shader::ShaderStageCreateInfos;
 use super::vertex_input::vertex_input_state_create_info;
 use super::viewport::ViewportStateCreateInfo;
 use ash::vk;
-use object_parser::Vertex;
+use model::Vertex;
 use rs42::Result;
 
 pub unsafe fn create_graphics_pipeline(

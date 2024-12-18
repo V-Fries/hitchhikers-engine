@@ -7,7 +7,7 @@ mod image;
 
 use std::ffi::c_void;
 
-use object_parser::{Model, ObjFile};
+use model::{Model, ObjFile};
 use rs42::{
     scope_guard::{Defer, ScopeGuard},
     Result,

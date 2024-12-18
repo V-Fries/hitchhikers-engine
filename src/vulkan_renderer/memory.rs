@@ -61,10 +61,10 @@ impl Memory {
         render_targets: &RenderTargets,
     ) -> Result<Self> {
         let model = Model::try_from(ObjFile(OBJ_FILE_PATH))?;
-        let vertex_buffer = create_vertex_buffer(context, interface, &model.vertices)?
+        let vertex_buffer = create_vertex_buffer(context, interface, model.vertices())?
             .defer(|mut vertex_buffer| vertex_buffer.destroy(context.device()));
 
-        let index_buffer = create_index_buffer(context, interface, &model.indices)?
+        let index_buffer = create_index_buffer(context, interface, model.vertex_indices())?
             .defer(|mut index_buffer| index_buffer.destroy(context.device()));
 
         let (uniform_buffers, mapped_uniform_buffers) = create_uniform_buffers(context)?;
@@ -101,7 +101,7 @@ impl Memory {
             mapped_uniform_buffers,
             uniform_buffers: ScopeGuard::into_inner(uniform_buffers),
             index_buffer: ScopeGuard::into_inner(index_buffer),
-            index_buffer_len: model.indices.len() as u32,
+            index_buffer_len: model.vertex_indices().len() as u32,
             vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
             is_destroyed: false,
         })

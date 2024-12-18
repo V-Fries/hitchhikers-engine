@@ -3,18 +3,17 @@ use std::mem::offset_of;
 use ash::vk;
 use linear_algebra::Vector;
 
-pub type Vec2 = Vector<f32, 2>;
-pub type Vec3 = Vector<f32, 3>;
-
-pub type Color = Vec3;
+pub type Position = Vector<f32, 3>;
+pub type Color = Vector<f32, 3>;
+pub type TextureCoordinate = Vector<f32, 2>;
 
 // TODO research doing different buffers for positions and texture coordinates
 #[derive(Clone)]
 #[repr(C)]
 pub struct Vertex {
-    position: Vec3,
+    position: Position,
     color: Color, // TODO Might remove this
-    texture_coordinate: Vec2,
+    texture_coordinate: TextureCoordinate,
 }
 
 impl Vertex {
@@ -45,9 +44,9 @@ impl Eq for Vertex {}
 
 impl Vertex {
     pub fn new(
-        position: impl Into<Vec3>,
+        position: impl Into<Position>,
         color: impl Into<Color>,
-        texture_coordinate: impl Into<Vec2>,
+        texture_coordinate: impl Into<TextureCoordinate>,
     ) -> Self {
         Self {
             position: position.into(),
@@ -68,17 +67,17 @@ impl Vertex {
             vk::VertexInputAttributeDescription::default()
                 .binding(0)
                 .location(0)
-                .format(vk::Format::R32G32B32_SFLOAT)
+                .format(vk::Format::R32G32B32_SFLOAT) // TODO maybe a macro can extrapolate this
                 .offset(offset_of!(Self, position) as u32),
             vk::VertexInputAttributeDescription::default()
                 .binding(0)
                 .location(1)
-                .format(vk::Format::R32G32B32_SFLOAT)
+                .format(vk::Format::R32G32B32_SFLOAT) // TODO maybe a macro can extrapolate this
                 .offset(offset_of!(Self, color) as u32),
             vk::VertexInputAttributeDescription::default()
                 .binding(0)
                 .location(2)
-                .format(vk::Format::R32G32_SFLOAT)
+                .format(vk::Format::R32G32_SFLOAT) // TODO maybe a macro can extrapolate this
                 .offset(offset_of!(Self, texture_coordinate) as u32),
         ]
     }

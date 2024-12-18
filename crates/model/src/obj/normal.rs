@@ -1,7 +1,7 @@
 use std::mem::{self, MaybeUninit};
 
 use linear_algebra::Vector;
-use rs42::extensions::{vec::TryPush, PipeLine};
+use rs42::extensions::PipeLine;
 
 use super::ObjParsingErrorDetail;
 
@@ -24,9 +24,7 @@ pub fn parse_normal_line<'a>(
 
     let normal = unsafe { mem::transmute::<[MaybeUninit<f32>; 3], [f32; 3]>(normal) };
     let normal = Vector::<_, 3>::from(normal).normalize();
-    normals
-        .try_push(normal)
-        .map_err(ObjParsingErrorDetail::AllocationFailure)?;
+    normals.push(normal);
     Ok(())
 }
 

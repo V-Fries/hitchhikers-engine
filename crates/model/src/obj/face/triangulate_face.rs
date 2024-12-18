@@ -1,7 +1,6 @@
 use linear_algebra::{Matrix, Vec3, Vec4};
-use rs42::extensions::vec::TryPush;
 
-use crate::obj::{ObjBuilder, ObjParsingErrorDetail};
+use crate::obj::ObjBuilder;
 
 use super::Face;
 
@@ -12,32 +11,23 @@ pub struct Triangles {
     pub normals: Vec<[u32; 3]>,
 }
 
-pub fn triangulate_face(
-    face: Face,
-    _obj_builder: &ObjBuilder,
-) -> Result<Triangles, ObjParsingErrorDetail> {
+pub fn triangulate_face(face: Face, _obj_builder: &ObjBuilder) -> Triangles {
     // TODO write an algorithm that works with concave polygons
 
-    (1..face.geometries_indices.len() - 1).try_fold(Triangles::default(), |mut triangles, i| {
-        try_push_triangle(&mut triangles.geometries, &face.geometries_indices, i)?;
+    (1..face.geometries_indices.len() - 1).fold(Triangles::default(), |mut triangles, i| {
+        push_triangle(&mut triangles.geometries, &face.geometries_indices, i);
         if !face.textures_indices.is_empty() {
-            try_push_triangle(&mut triangles.textures, &face.textures_indices, i)?;
+            push_triangle(&mut triangles.textures, &face.textures_indices, i);
         }
         if !face.normals_indices.is_empty() {
-            try_push_triangle(&mut triangles.normals, &face.normals_indices, i)?;
+            push_triangle(&mut triangles.normals, &face.normals_indices, i);
         }
-        Ok(triangles)
+        triangles
     })
 }
 
-fn try_push_triangle(
-    dest_triangles_vec: &mut Vec<[u32; 3]>,
-    indices: &[u32],
-    i: usize,
-) -> Result<(), ObjParsingErrorDetail> {
-    dest_triangles_vec
-        .try_push([indices[0], indices[i], indices[i + 1]])
-        .map_err(ObjParsingErrorDetail::AllocationFailure)
+fn push_triangle(dest_triangles_vec: &mut Vec<[u32; 3]>, indices: &[u32], i: usize) {
+    dest_triangles_vec.push([indices[0], indices[i], indices[i + 1]]);
 }
 
 // This will be used when we will support triangulation of concave polygons

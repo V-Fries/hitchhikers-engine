@@ -1,7 +1,7 @@
 use std::mem::{self, MaybeUninit};
 
 use linear_algebra::Vector;
-use rs42::extensions::{vec::TryPush, PipeLine};
+use rs42::extensions::PipeLine;
 
 use super::ObjParsingErrorDetail;
 
@@ -27,9 +27,7 @@ pub fn parse_vertex_line<'a>(
     }
 
     let vertex = unsafe { mem::transmute::<[MaybeUninit<f32>; 4], [f32; 4]>(vertex) };
-    vertices
-        .try_push(vertex.into())
-        .map_err(ObjParsingErrorDetail::AllocationFailure)?;
+    vertices.push(vertex.into());
     Ok(())
 }
 

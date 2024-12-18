@@ -12,7 +12,6 @@ pub struct Model {
     vertex_indices: Box<[VertexIndex]>,
 }
 
-
 // Constructors:
 
 impl<'a> TryFrom<ObjFile<'a>> for Model {
@@ -22,7 +21,6 @@ impl<'a> TryFrom<ObjFile<'a>> for Model {
         ModelBuilder::try_from(obj_file)?.build().pipe(Ok)
     }
 }
-
 
 // Getters:
 

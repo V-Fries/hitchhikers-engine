@@ -11,7 +11,6 @@ use texture::parse_texture_line;
 use vertex::parse_vertex_line;
 
 use std::{
-    collections::TryReserveError,
     error::Error,
     fmt::{Debug, Display},
     fs::File,
@@ -56,8 +55,6 @@ pub struct ObjParsingError {
 pub enum ObjParsingErrorDetail {
     FailedToOpenFile(io::Error),
     FailedToReadFile(io::Error),
-
-    AllocationFailure(TryReserveError),
 
     NotEnoughComponentsInVertex,
     TooManyComponentsInVertex,

@@ -18,7 +18,7 @@ pub fn parse_face_line<'a>(
 ) -> Result<(), ObjParsingErrorDetail> {
     let face = parse_face_components(components, obj_builder)?;
 
-    let triangles = triangulate_face(face, obj_builder)?;
+    let triangles = triangulate_face(face, obj_builder);
 
     obj_builder.faces_geometry.extend(triangles.geometries);
 

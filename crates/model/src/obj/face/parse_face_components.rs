@@ -68,9 +68,6 @@ fn push_face_sub_component_to_index_vec<T>(
     if index as usize >= associated_vec.len() {
         return Err(invalid_index_err);
     }
-    dest_index_vec
-        .try_reserve(1)
-        .map_err(ObjParsingErrorDetail::AllocationFailure)?;
     dest_index_vec.push(index);
     Ok(())
 }

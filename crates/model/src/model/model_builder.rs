@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{obj::Obj, vertex::TextureCoordinate, ObjFile, Vertex};
 
-use super::{VertexIndex, Model};
+use super::{Model, VertexIndex};
 
 #[derive(Default)]
 pub struct ModelBuilder {

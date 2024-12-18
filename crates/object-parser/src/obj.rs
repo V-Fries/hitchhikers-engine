@@ -1,40 +1,45 @@
 mod face;
 mod handle_unrecognized_line;
+mod normal;
+mod texture;
 mod vertex;
 
 use face::parse_face_line;
 use handle_unrecognized_line::handle_unrecognized_line;
+use normal::parse_normal_line;
+use texture::parse_texture_line;
 use vertex::parse_vertex_line;
 
 use std::{
     collections::TryReserveError,
-    fmt::Debug,
+    error::Error,
+    fmt::{Debug, Display},
     fs::File,
     io::{self, BufRead, BufReader, Read},
 };
 
 use linear_algebra::Vector;
 
-pub struct ObjFile<'a>(&'a str);
+pub struct ObjFile<'a>(pub &'a str);
 
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Obj {
-    geometry: Box<[Vector<f32, 4>]>,
+    pub geometry: Box<[Vector<f32, 4>]>,
     //vp: Box<[Vector<f32, 3>]>,
-    //vn: Box<[Vector<f32, 3>]>,
-    //vt: Box<[Vector<f32, 3>]>,
-    faces_geometry: Box<[[u32; 3]]>,
-    faces_textures: Box<[[u32; 3]]>,
-    faces_normals: Box<[[u32; 3]]>,
+    pub normals: Box<[Vector<f32, 3>]>,
+    pub textures: Box<[Vector<f32, 3>]>,
+    pub faces_geometry: Box<[[u32; 3]]>,
+    pub faces_textures: Box<[[u32; 3]]>,
+    pub faces_normals: Box<[[u32; 3]]>,
 }
 
 #[derive(Default, Debug)]
 struct ObjBuilder {
     geometry: Vec<Vector<f32, 4>>,
     //vp: Vec<Vector<f32, 3>>,
-    //vn: Vec<Vector<f32, 3>>,
-    //vt: Vec<Vector<f32, 3>>,
+    normals: Vec<Vector<f32, 3>>,
+    textures: Vec<Vector<f32, 3>>,
     faces_geometry: Vec<[u32; 3]>,
     faces_textures: Vec<[u32; 3]>,
     faces_normals: Vec<[u32; 3]>,
@@ -57,6 +62,15 @@ pub enum ObjParsingErrorDetail {
     NotEnoughComponentsInVertex,
     TooManyComponentsInVertex,
     InvalidComponentInVertex(<f32 as std::str::FromStr>::Err),
+
+    NotEnoughComponentsInNormal,
+    TooManyComponentsInNormal,
+    InvalidComponentInNormal(<f32 as std::str::FromStr>::Err),
+
+    NotEnoughComponentsInTexture,
+    TooManyComponentsInTexture,
+    InvalidComponentInTexture(<f32 as std::str::FromStr>::Err),
+    ComponentInNormalIsNotInRange0To1,
 
     FaceGeometryDoesNotExist,
     FaceTextureDoesNotExist,
@@ -83,13 +97,21 @@ impl Debug for ObjParsingError {
     }
 }
 
+impl Display for ObjParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl Error for ObjParsingError {}
+
 impl ObjBuilder {
     fn build(self) -> Obj {
         Obj {
             geometry: self.geometry.into_boxed_slice(),
             //vp: self.vp.into_boxed_slice(),
-            //vn: self.vn.into_boxed_slice(),
-            //vt: self.vt.into_boxed_slice(),
+            normals: self.normals.into_boxed_slice(),
+            textures: self.textures.into_boxed_slice(),
             faces_geometry: self.faces_geometry.into_boxed_slice(),
             faces_textures: self.faces_textures.into_boxed_slice(),
             faces_normals: self.faces_normals.into_boxed_slice(),
@@ -146,6 +168,8 @@ fn parse_line(
 
     match first_word {
         "v" => parse_vertex_line(&mut split, &mut obj_builder.geometry),
+        "vt" => parse_texture_line(&mut split, &mut obj_builder.textures),
+        "vn" => parse_normal_line(&mut split, &mut obj_builder.normals),
         "f" => parse_face_line(&mut split, obj_builder),
         _ => {
             handle_unrecognized_line(first_word, line_count, line);

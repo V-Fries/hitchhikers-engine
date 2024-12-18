@@ -30,7 +30,7 @@ fn parse_face_sub_components<'a>(
 
     if let Err(err) = push_face_sub_component_to_index_vec(
         sub_components.next(),
-        &obj_builder.faces_textures,
+        &obj_builder.textures,
         ObjParsingErrorDetail::FaceTextureDoesNotExist,
         &mut face.textures_indices,
     ) {
@@ -42,7 +42,7 @@ fn parse_face_sub_components<'a>(
 
     push_face_sub_component_to_index_vec(
         sub_components.next(),
-        &obj_builder.faces_normals,
+        &obj_builder.normals,
         ObjParsingErrorDetail::FaceNormalDoesNotExist,
         &mut face.normals_indices,
     )?;

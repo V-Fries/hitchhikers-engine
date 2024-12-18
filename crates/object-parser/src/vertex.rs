@@ -8,12 +8,40 @@ pub type Vec3 = Vector<f32, 3>;
 
 pub type Color = Vec3;
 
+// TODO research doing different buffers for positions and texture coordinates
+#[derive(Clone)]
 #[repr(C)]
 pub struct Vertex {
     position: Vec3,
     color: Color, // TODO Might remove this
     texture_coordinate: Vec2,
 }
+
+impl Vertex {
+    fn into_tuple_of_bits(self) -> ([u32; 3], [u32; 3], [u32; 2]) {
+        (
+            self.position.into_scalars().map(|e| e.to_bits()),
+            self.color.into_scalars().map(|e| e.to_bits()),
+            self.texture_coordinate.into_scalars().map(|e| e.to_bits()),
+        )
+    }
+}
+
+impl std::hash::Hash for Vertex {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.clone().into_tuple_of_bits().hash(state)
+    }
+}
+
+impl PartialEq for Vertex {
+    fn eq(&self, other: &Self) -> bool {
+        self.clone()
+            .into_tuple_of_bits()
+            .eq(&other.clone().into_tuple_of_bits())
+    }
+}
+
+impl Eq for Vertex {}
 
 impl Vertex {
     pub fn new(

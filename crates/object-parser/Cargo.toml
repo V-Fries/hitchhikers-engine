@@ -8,3 +8,6 @@ linear-algebra = { path = "../linear-algebra" }
 
 # Utilities
 rs42 = "0.2.0"
+
+# Vulkan wrapper
+ash = "0.38.0"

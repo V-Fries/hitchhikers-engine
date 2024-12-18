@@ -21,7 +21,7 @@ pub fn triangulate_face(
     (1..face.geometries_indices.len() - 1).try_fold(Triangles::default(), |mut triangles, i| {
         try_push_triangle(&mut triangles.geometries, &face.geometries_indices, i)?;
         if !face.textures_indices.is_empty() {
-            try_push_triangle(&mut triangles.textures, &face.normals_indices, i)?;
+            try_push_triangle(&mut triangles.textures, &face.textures_indices, i)?;
         }
         if !face.normals_indices.is_empty() {
             try_push_triangle(&mut triangles.normals, &face.normals_indices, i)?;

@@ -5,14 +5,13 @@ mod descriptors;
 mod errors;
 mod image;
 
-use std::{ffi::c_void, sync::LazyLock};
+use std::ffi::c_void;
 
+use object_parser::{Model, ObjFile};
 use rs42::{
     scope_guard::{Defer, ScopeGuard},
     Result,
 };
-
-use crate::vertex::Vertex;
 
 use super::{
     buffer::Buffer, render_targets::RenderTargets, vulkan_context::VulkanContext,
@@ -34,30 +33,15 @@ error_struct_custom_display!(
 );
 
 // TODO remove this
-pub static VERTICES: LazyLock<[Vertex; 8]> = LazyLock::new(|| {
-    [
-        Vertex::new([-0.5, -0.5, 0.], [1.0, 0.0, 0.0], [1., 0.]),
-        Vertex::new([0.5, -0.5, 0.], [0.0, 1.0, 0.0], [0., 0.]),
-        Vertex::new([0.5, 0.5, 0.], [0.0, 0.0, 1.0], [0., 1.]),
-        Vertex::new([-0.5, 0.5, 0.], [1.0, 1.0, 1.0], [1., 1.]),
-        Vertex::new([-0.5, -0.5, -0.5], [1.0, 0.0, 0.0], [1., 0.]),
-        Vertex::new([0.5, -0.5, -0.5], [0.0, 1.0, 0.0], [0., 0.]),
-        Vertex::new([0.5, 0.5, -0.5], [0.0, 0.0, 1.0], [0., 1.]),
-        Vertex::new([-0.5, 0.5, -0.5], [1.0, 1.0, 1.0], [1., 1.]),
-    ]
-});
-
-// TODO remove this
-pub static INDICES: [u16; 12] = [0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
-
-// TODO remove this
-pub const PPM_FILE_PATH: &str = "assets/textures/test.ppm";
+pub const PPM_FILE_PATH: &str = "assets/textures/viking_room.ppm";
+pub const OBJ_FILE_PATH: &str = "assets/obj/viking_room.obj";
 
 pub struct Memory {
     is_destroyed: bool,
 
     vertex_buffer: Buffer,
     index_buffer: Buffer,
+    index_buffer_len: u32,
 
     uniform_buffers: [Buffer; NB_OF_FRAMES_IN_FLIGHT_USIZE],
     mapped_uniform_buffers: [*mut c_void; NB_OF_FRAMES_IN_FLIGHT_USIZE],
@@ -76,10 +60,11 @@ impl Memory {
         interface: &VulkanInterface,
         render_targets: &RenderTargets,
     ) -> Result<Self> {
-        let vertex_buffer = create_vertex_buffer(context, interface)?
+        let model = Model::try_from(ObjFile(OBJ_FILE_PATH))?;
+        let vertex_buffer = create_vertex_buffer(context, interface, &model.vertices)?
             .defer(|mut vertex_buffer| vertex_buffer.destroy(context.device()));
 
-        let index_buffer = create_index_buffer(context, interface)?
+        let index_buffer = create_index_buffer(context, interface, &model.indices)?
             .defer(|mut index_buffer| index_buffer.destroy(context.device()));
 
         let (uniform_buffers, mapped_uniform_buffers) = create_uniform_buffers(context)?;
@@ -116,6 +101,7 @@ impl Memory {
             mapped_uniform_buffers,
             uniform_buffers: ScopeGuard::into_inner(uniform_buffers),
             index_buffer: ScopeGuard::into_inner(index_buffer),
+            index_buffer_len: model.indices.len() as u32,
             vertex_buffer: ScopeGuard::into_inner(vertex_buffer),
             is_destroyed: false,
         })
@@ -242,6 +228,11 @@ impl Memory {
         debug_assert!(!self.is_destroyed);
 
         &self.index_buffer
+    }
+
+    pub fn index_buffer_len(&self) -> u32 {
+        debug_assert!(!self.is_destroyed);
+        self.index_buffer_len
     }
 
     pub fn uniform_buffers(&self) -> &[Buffer; NB_OF_FRAMES_IN_FLIGHT_USIZE] {

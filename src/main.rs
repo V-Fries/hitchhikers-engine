@@ -1,6 +1,5 @@
 mod app;
 mod engine;
-mod vertex;
 mod vulkan_renderer;
 
 use app::App;

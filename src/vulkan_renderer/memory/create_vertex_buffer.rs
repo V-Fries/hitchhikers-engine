@@ -1,4 +1,5 @@
 use ash::vk;
+use object_parser::Vertex;
 
 use crate::vulkan_renderer::{
     buffer::Buffer, vulkan_context::VulkanContext, vulkan_interface::VulkanInterface,
@@ -8,13 +9,12 @@ use rs42::{
     Result,
 };
 
-use super::VERTICES;
-
 pub unsafe fn create_vertex_buffer(
     context: &VulkanContext,
     interface: &VulkanInterface,
+    vertices: &[Vertex],
 ) -> Result<Buffer> {
-    let buffer_size = (size_of_val(&VERTICES[0]) * VERTICES.len()) as vk::DeviceSize;
+    let buffer_size = (size_of_val(&vertices[0]) * vertices.len()) as vk::DeviceSize;
 
     let staging_buffer = Buffer::new(
         context,
@@ -25,7 +25,7 @@ pub unsafe fn create_vertex_buffer(
     )?
     .defer(|mut staging_buffer| unsafe { staging_buffer.destroy(context.device()) });
 
-    unsafe { staging_buffer.copy_from_ram(0, &*VERTICES, context.device())? }
+    unsafe { staging_buffer.copy_from_ram(0, vertices, context.device())? }
 
     let vertex_buffer = Buffer::new(
         context,

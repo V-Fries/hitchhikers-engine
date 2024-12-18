@@ -11,6 +11,7 @@ pub fn create_depth_buffer(
 ) -> Result<Image> {
     Image::new(
         context,
+        1,
         swapchain_extent,
         find_depth_buffer_format(context)?,
         vk::ImageTiling::OPTIMAL,

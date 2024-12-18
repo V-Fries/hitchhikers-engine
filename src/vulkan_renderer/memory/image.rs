@@ -2,7 +2,10 @@ use crate::vulkan_renderer::{
     buffer::Buffer, memory::Memory, single_time_command::SingleTimeCommand,
     vulkan_context::VulkanContext, vulkan_interface::VulkanInterface,
 };
-use ash::{prelude::VkResult, vk};
+use ash::{
+    prelude::VkResult,
+    vk::{self, Offset3D},
+};
 use rs42::{
     scope_guard::{Defer, ScopeGuard},
     Result,
@@ -12,6 +15,7 @@ pub struct Image {
     image: vk::Image,
     memory: vk::DeviceMemory,
     image_view: vk::ImageView,
+    mip_levels: u32,
     #[cfg(debug_assertions)]
     is_destroyed: bool,
 }
@@ -29,6 +33,7 @@ struct TransitionImageLayoutInfo {
 impl Image {
     pub fn new(
         context: &VulkanContext,
+        mip_levels: u32,
         extent: vk::Extent2D,
         format: vk::Format,
         tiling: vk::ImageTiling,
@@ -36,7 +41,9 @@ impl Image {
         properties: vk::MemoryPropertyFlags,
         aspect_mask: vk::ImageAspectFlags,
     ) -> Result<Self> {
-        let image = Self::init_image(context.device(), extent, format, tiling, usage)?
+        assert!(mip_levels >= 1);
+
+        let image = Self::init_image(context.device(), extent, mip_levels, format, tiling, usage)?
             .defer(|image| unsafe { context.device().destroy_image(image, None) });
 
         let memory = Self::init_memory(context, *image, properties)?
@@ -44,15 +51,16 @@ impl Image {
 
         unsafe { context.device().bind_image_memory(*image, *memory, 0)? };
 
-        let image_view =
-            unsafe { Self::init_image_view(context.device(), *image, format, aspect_mask)? }.defer(
-                |image_view| unsafe { context.device().destroy_image_view(image_view, None) },
-            );
+        let image_view = unsafe {
+            Self::init_image_view(context.device(), *image, format, aspect_mask, mip_levels)?
+        }
+        .defer(|image_view| unsafe { context.device().destroy_image_view(image_view, None) });
 
         Ok(Self {
             image_view: ScopeGuard::into_inner(image_view),
             memory: ScopeGuard::into_inner(memory),
             image: ScopeGuard::into_inner(image),
+            mip_levels,
             #[cfg(debug_assertions)]
             is_destroyed: false,
         })
@@ -61,6 +69,7 @@ impl Image {
     fn init_image(
         device: &ash::Device,
         extent: vk::Extent2D,
+        mip_levels: u32,
         format: vk::Format,
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
@@ -73,7 +82,7 @@ impl Image {
                     .height(extent.height)
                     .depth(1),
             )
-            .mip_levels(1)
+            .mip_levels(mip_levels)
             .array_layers(1)
             .format(format)
             .tiling(tiling)
@@ -106,6 +115,7 @@ impl Image {
         image: vk::Image,
         format: vk::Format,
         aspect_mask: vk::ImageAspectFlags,
+        mip_levels: u32,
     ) -> VkResult<vk::ImageView> {
         device.create_image_view(
             &vk::ImageViewCreateInfo::default()
@@ -116,7 +126,7 @@ impl Image {
                     vk::ImageSubresourceRange::default()
                         .aspect_mask(aspect_mask)
                         .base_mip_level(0)
-                        .level_count(1)
+                        .level_count(mip_levels)
                         .base_array_layer(0)
                         .layer_count(1),
                 ),
@@ -141,15 +151,24 @@ impl Image {
 
         unsafe { staging_buffer.copy_from_ram(0, texture, context.device())? };
 
+        let mip_levels = (texture.width() as f32)
+            .max(texture.height() as f32)
+            .log2()
+            .floor() as u32
+            + 1;
+
         let image = Self::new(
             context,
+            mip_levels,
             vk::Extent2D {
                 width: texture.width() as u32,
                 height: texture.height() as u32,
             },
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::SAMPLED,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
             vk::ImageAspectFlags::COLOR,
         )?
@@ -173,11 +192,11 @@ impl Image {
             interface,
         )?;
 
-        image.transition_image_layout_from_transfer_dst_optimal_to_shader_read_only_optimal(
-            context.device(),
-            interface,
-            vk::Format::R8G8B8A8_SRGB,
-        )?;
+        //image.transition_image_layout_from_transfer_dst_optimal_to_shader_read_only_optimal(
+        //    context.device(),
+        //    interface,
+        //    vk::Format::R8G8B8A8_SRGB,
+        //)?;
 
         Ok(ScopeGuard::into_inner(image))
     }
@@ -261,7 +280,7 @@ impl Image {
                 vk::ImageSubresourceRange::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_mip_level(0)
-                    .level_count(1)
+                    .level_count(self.mip_levels)
                     .base_array_layer(0)
                     .layer_count(1),
             )
@@ -277,6 +296,90 @@ impl Image {
             &[],
             &[barrier],
         );
+
+        single_time_command.submit()?;
+        Ok(())
+    }
+
+    unsafe fn generate_mip_maps(
+        &self,
+        extent: vk::Extent2D,
+        device: &ash::Device,
+        interface: &VulkanInterface,
+    ) -> VkResult<()> {
+        let single_time_command = SingleTimeCommand::begin(device, interface)?;
+
+        let mut barrier = [vk::ImageMemoryBarrier::default()
+            .image(self.image)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .level_count(1),
+            )];
+
+        for i in 1..self.mip_levels {
+            barrier[0].subresource_range.base_mip_level = i - 1;
+            barrier[0].old_layout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
+            barrier[0].new_layout = vk::ImageLayout::TRANSFER_SRC_OPTIMAL;
+            barrier[0].src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+            barrier[0].dst_access_mask = vk::AccessFlags::TRANSFER_READ;
+
+            device.cmd_pipeline_barrier(
+                *single_time_command,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &barrier,
+            );
+
+            let blit = [vk::ImageBlit::default()
+                .src_offsets([
+                    vk::Offset3D { x: 0, y: 0, z: 0 },
+                    vk::Offset3D {
+                        x: extent.width as i32,
+                        y: extent.height as i32,
+                        z: 1,
+                    },
+                ])
+                .src_subresource(
+                    vk::ImageSubresourceLayers::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .mip_level(i - 1)
+                        .base_array_layer(0)
+                        .layer_count(1),
+                )
+                .dst_offsets([
+                    Offset3D { x: 0, y: 0, z: 0 },
+                    Offset3D {
+                        x: (extent.width / 2).max(1) as i32,
+                        y: (extent.height / 2).max(1) as i32,
+                        z: 1,
+                    },
+                ])
+                .dst_subresource(
+                    vk::ImageSubresourceLayers::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .mip_level(i)
+                        .base_array_layer(0)
+                        .layer_count(1),
+                )];
+
+            device.cmd_blit_image(
+                *single_time_command,
+                self.image,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                self.image,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &blit,
+                vk::Filter::LINEAR, // TODO Maybe cubic?
+            );
+        }
 
         single_time_command.submit()?;
         Ok(())

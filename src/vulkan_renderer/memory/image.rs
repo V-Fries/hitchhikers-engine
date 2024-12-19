@@ -1,3 +1,5 @@
+mod from_texture_image;
+
 use crate::vulkan_renderer::{
     buffer::Buffer, memory::Memory, single_time_command::SingleTimeCommand,
     vulkan_context::VulkanContext, vulkan_interface::VulkanInterface,
@@ -12,6 +14,7 @@ pub struct Image {
     image: vk::Image,
     memory: vk::DeviceMemory,
     image_view: vk::ImageView,
+    mip_levels: u32,
     #[cfg(debug_assertions)]
     is_destroyed: bool,
 }
@@ -26,33 +29,51 @@ struct TransitionImageLayoutInfo {
     dst_stage_mask: vk::PipelineStageFlags,
 }
 
-impl Image {
-    pub fn new(
-        context: &VulkanContext,
-        extent: vk::Extent2D,
-        format: vk::Format,
-        tiling: vk::ImageTiling,
-        usage: vk::ImageUsageFlags,
-        properties: vk::MemoryPropertyFlags,
-        aspect_mask: vk::ImageAspectFlags,
-    ) -> Result<Self> {
-        let image = Self::init_image(context.device(), extent, format, tiling, usage)?
-            .defer(|image| unsafe { context.device().destroy_image(image, None) });
+pub struct ImageCreateInfo {
+    pub mip_levels: u32,
+    pub extent: vk::Extent2D,
+    pub format: vk::Format,
+    pub tiling: vk::ImageTiling,
+    pub usage: vk::ImageUsageFlags,
+    pub properties: vk::MemoryPropertyFlags,
+    pub aspect_mask: vk::ImageAspectFlags,
+}
 
-        let memory = Self::init_memory(context, *image, properties)?
+impl Image {
+    pub fn new(context: &VulkanContext, image_create_info: ImageCreateInfo) -> Result<Self> {
+        assert!(image_create_info.mip_levels >= 1);
+
+        let image = Self::init_image(
+            context.device(),
+            image_create_info.extent,
+            image_create_info.mip_levels,
+            image_create_info.format,
+            image_create_info.tiling,
+            image_create_info.usage,
+        )?
+        .defer(|image| unsafe { context.device().destroy_image(image, None) });
+
+        let memory = Self::init_memory(context, *image, image_create_info.properties)?
             .defer(|memory| unsafe { context.device().free_memory(memory, None) });
 
         unsafe { context.device().bind_image_memory(*image, *memory, 0)? };
 
-        let image_view =
-            unsafe { Self::init_image_view(context.device(), *image, format, aspect_mask)? }.defer(
-                |image_view| unsafe { context.device().destroy_image_view(image_view, None) },
-            );
+        let image_view = unsafe {
+            Self::init_image_view(
+                context.device(),
+                *image,
+                image_create_info.format,
+                image_create_info.aspect_mask,
+                image_create_info.mip_levels,
+            )?
+        }
+        .defer(|image_view| unsafe { context.device().destroy_image_view(image_view, None) });
 
         Ok(Self {
             image_view: ScopeGuard::into_inner(image_view),
             memory: ScopeGuard::into_inner(memory),
             image: ScopeGuard::into_inner(image),
+            mip_levels: image_create_info.mip_levels,
             #[cfg(debug_assertions)]
             is_destroyed: false,
         })
@@ -61,6 +82,7 @@ impl Image {
     fn init_image(
         device: &ash::Device,
         extent: vk::Extent2D,
+        mip_levels: u32,
         format: vk::Format,
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
@@ -73,7 +95,7 @@ impl Image {
                     .height(extent.height)
                     .depth(1),
             )
-            .mip_levels(1)
+            .mip_levels(mip_levels)
             .array_layers(1)
             .format(format)
             .tiling(tiling)
@@ -106,6 +128,7 @@ impl Image {
         image: vk::Image,
         format: vk::Format,
         aspect_mask: vk::ImageAspectFlags,
+        mip_levels: u32,
     ) -> VkResult<vk::ImageView> {
         device.create_image_view(
             &vk::ImageViewCreateInfo::default()
@@ -116,170 +139,12 @@ impl Image {
                     vk::ImageSubresourceRange::default()
                         .aspect_mask(aspect_mask)
                         .base_mip_level(0)
-                        .level_count(1)
+                        .level_count(mip_levels)
                         .base_array_layer(0)
                         .layer_count(1),
                 ),
             None,
         )
-    }
-
-    pub fn from_texture_image(
-        context: &VulkanContext,
-        interface: &VulkanInterface,
-        texture: &image_parser::Image,
-    ) -> Result<Self> {
-        // TODO Refactor
-        let staging_buffer = Buffer::new(
-            context,
-            (texture.width() * texture.height() * size_of_val(&texture[0])) as vk::DeviceSize,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::SharingMode::EXCLUSIVE,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?
-        .defer(|mut staging_buffer| unsafe { staging_buffer.destroy(context.device()) });
-
-        unsafe { staging_buffer.copy_from_ram(0, texture, context.device())? };
-
-        let image = Self::new(
-            context,
-            vk::Extent2D {
-                width: texture.width() as u32,
-                height: texture.height() as u32,
-            },
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            vk::ImageAspectFlags::COLOR,
-        )?
-        .defer(|mut image| unsafe { image.destroy(context.device()) });
-
-        // TODO the next 3 function call all create a SingleTimeCommand, make them share a single
-        // command buffer
-        // Might be worth looking into creating a single SingleTimeCommand per frame
-
-        image.transition_image_layout_from_undefined_to_transfer_dst_optimal(
-            context.device(),
-            interface,
-            vk::Format::R8G8B8A8_SRGB,
-        )?;
-
-        image.copy_from_buffer(
-            &staging_buffer,
-            texture.width() as u32,
-            texture.height() as u32,
-            context.device(),
-            interface,
-        )?;
-
-        image.transition_image_layout_from_transfer_dst_optimal_to_shader_read_only_optimal(
-            context.device(),
-            interface,
-            vk::Format::R8G8B8A8_SRGB,
-        )?;
-
-        Ok(ScopeGuard::into_inner(image))
-    }
-
-    fn transition_image_layout_from_undefined_to_transfer_dst_optimal(
-        &self,
-        device: &ash::Device,
-        interface: &VulkanInterface,
-        format: vk::Format,
-    ) -> VkResult<()> {
-        #[cfg(debug_assertions)]
-        {
-            debug_assert!(!self.is_destroyed)
-        }
-
-        unsafe {
-            self.transition_image_layout(
-                device,
-                interface,
-                TransitionImageLayoutInfo {
-                    _format: format,
-                    old_layout: vk::ImageLayout::UNDEFINED,
-                    new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    src_access_mask: vk::AccessFlags::empty(),
-                    dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                    src_stage_mask: vk::PipelineStageFlags::TOP_OF_PIPE,
-                    dst_stage_mask: vk::PipelineStageFlags::TRANSFER,
-                },
-            )
-        }
-    }
-
-    fn transition_image_layout_from_transfer_dst_optimal_to_shader_read_only_optimal(
-        &self,
-        device: &ash::Device,
-        interface: &VulkanInterface,
-        format: vk::Format,
-    ) -> VkResult<()> {
-        #[cfg(debug_assertions)]
-        {
-            debug_assert!(!self.is_destroyed)
-        }
-
-        unsafe {
-            self.transition_image_layout(
-                device,
-                interface,
-                TransitionImageLayoutInfo {
-                    _format: format,
-                    old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                    dst_access_mask: vk::AccessFlags::SHADER_READ,
-                    src_stage_mask: vk::PipelineStageFlags::TRANSFER,
-                    dst_stage_mask: vk::PipelineStageFlags::FRAGMENT_SHADER,
-                },
-            )
-        }
-    }
-
-    unsafe fn transition_image_layout(
-        &self,
-        device: &ash::Device,
-        interface: &VulkanInterface,
-        info: TransitionImageLayoutInfo,
-    ) -> VkResult<()> {
-        #[cfg(debug_assertions)]
-        {
-            debug_assert!(!self.is_destroyed)
-        }
-
-        let single_time_command = SingleTimeCommand::begin(device, interface)?;
-
-        let barrier = vk::ImageMemoryBarrier::default()
-            .old_layout(info.old_layout)
-            .new_layout(info.new_layout)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(self.image)
-            .subresource_range(
-                vk::ImageSubresourceRange::default()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_mip_level(0)
-                    .level_count(1)
-                    .base_array_layer(0)
-                    .layer_count(1),
-            )
-            .src_access_mask(info.src_access_mask)
-            .dst_access_mask(info.dst_access_mask);
-
-        device.cmd_pipeline_barrier(
-            *single_time_command,
-            info.src_stage_mask,
-            info.dst_stage_mask,
-            vk::DependencyFlags::empty(),
-            &[],
-            &[],
-            &[barrier],
-        );
-
-        single_time_command.submit()?;
-        Ok(())
     }
 
     fn copy_from_buffer(

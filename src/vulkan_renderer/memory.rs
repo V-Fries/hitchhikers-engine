@@ -23,7 +23,7 @@ use create_uniform_buffers::create_uniform_buffers;
 use create_vertex_buffer::create_vertex_buffer;
 use descriptors::create_descriptor_pool;
 use descriptors::create_descriptor_sets;
-pub use image::Image;
+pub use image::{Image, ImageCreateInfo};
 use image_parser::ppm::PpmFilePath;
 use rs42::error_struct_custom_display;
 
@@ -177,7 +177,7 @@ impl Memory {
                     .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
                     .mip_lod_bias(0.)
                     .min_lod(0.)
-                    .max_lod(0.),
+                    .max_lod(vk::LOD_CLAMP_NONE),
                 None,
             )
         }

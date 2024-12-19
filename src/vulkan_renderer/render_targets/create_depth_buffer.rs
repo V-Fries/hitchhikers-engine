@@ -1,6 +1,9 @@
 use ash::vk;
 
-use crate::vulkan_renderer::{memory::Image, vulkan_context::VulkanContext};
+use crate::vulkan_renderer::{
+    memory::{Image, ImageCreateInfo},
+    vulkan_context::VulkanContext,
+};
 use rs42::Result;
 
 use super::errors::FailedToFindSupportedFormatForDepthBuffer;
@@ -11,12 +14,15 @@ pub fn create_depth_buffer(
 ) -> Result<Image> {
     Image::new(
         context,
-        swapchain_extent,
-        find_depth_buffer_format(context)?,
-        vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        vk::ImageAspectFlags::DEPTH,
+        ImageCreateInfo {
+            mip_levels: 1,
+            extent: swapchain_extent,
+            format: find_depth_buffer_format(context)?,
+            tiling: vk::ImageTiling::OPTIMAL,
+            usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            aspect_mask: vk::ImageAspectFlags::DEPTH,
+        },
     )
 }
 

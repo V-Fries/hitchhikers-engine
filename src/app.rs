@@ -16,8 +16,14 @@ impl ApplicationHandler for App {
             return;
         }
 
-        // TODO try to self.exit(event_loop) instead of expect
-        let engine = Engine::new(event_loop).expect("Failed to init Engine");
+        let engine = match Engine::new(event_loop) {
+            Ok(engine) => engine,
+            Err(err) => {
+                eprintln!("Failed to init Engine: {err}");
+                self.exit(event_loop);
+                return;
+            }
+        };
         engine.window().request_redraw();
         self.engine = Some(engine);
     }

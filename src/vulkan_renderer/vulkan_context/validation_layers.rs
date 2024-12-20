@@ -1,11 +1,13 @@
 use ash::vk;
+use he42_vulkan::debug_utils_messenger::{DebugUtilsMessenger, DebugUtilsMessengerCreateInfo};
+use he42_vulkan::VkResult;
 use he42_vulkan::{instance::Instance, VulkanLibrary};
-use rs42::extensions::PipeLine;
 use rs42::Result;
 
 use super::errors::ValidationLayerNotFound;
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr};
+use std::sync::Arc;
 
 type LayerName = String;
 
@@ -32,17 +34,8 @@ fn get_set_of_available_validation_layers(
         .collect()
 }
 
-pub fn create_debug_messenger(instance: &Instance) -> Result<vk::DebugUtilsMessengerEXT> {
-    unsafe {
-        instance
-            .debug_utils()
-            .create_debug_utils_messenger(&get_debug_utils_messenger_create_info(), None)?
-    }
-    .pipe(Ok)
-}
-
-fn get_debug_utils_messenger_create_info<'a>() -> vk::DebugUtilsMessengerCreateInfoEXT<'a> {
-    vk::DebugUtilsMessengerCreateInfoEXT::default()
+pub fn create_debug_messenger(instance: Arc<Instance>) -> VkResult<DebugUtilsMessenger> {
+    let create_info = DebugUtilsMessengerCreateInfo::default()
         .message_severity(
             vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
                 | vk::DebugUtilsMessageSeverityFlagsEXT::INFO
@@ -54,7 +47,9 @@ fn get_debug_utils_messenger_create_info<'a>() -> vk::DebugUtilsMessengerCreateI
                 | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
                 | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
         )
-        .pfn_user_callback(Some(debug_utils_messenger_callback))
+        .pfn_user_callback(Some(debug_utils_messenger_callback));
+
+    unsafe { DebugUtilsMessenger::new(instance, create_info) }
 }
 
 unsafe extern "system" fn debug_utils_messenger_callback(

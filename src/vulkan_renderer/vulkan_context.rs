@@ -2,6 +2,7 @@ mod device;
 mod errors;
 mod instance;
 mod queue_families;
+#[cfg(feature = "validation_layers")]
 mod validation_layers;
 
 use std::sync::Arc;
@@ -17,11 +18,16 @@ use rs42::{
 };
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
+#[cfg(feature = "validation_layers")]
+use he42_vulkan::debug_utils_messenger::DebugUtilsMessenger;
+#[cfg(feature = "validation_layers")]
+use validation_layers::{check_validation_layers, create_debug_messenger};
+
 pub struct VulkanContext {
     instance: Arc<Instance>,
 
     #[cfg(feature = "validation_layers")]
-    debug_messenger: vk::DebugUtilsMessengerEXT,
+    _debug_messenger: DebugUtilsMessenger,
 
     surface: vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
@@ -37,16 +43,15 @@ impl VulkanContext {
         let display_handle = window.display_handle()?.into();
         let window_handle = window.window_handle()?.into();
 
-        let (instance, debug_messenger) = create_instance(display_handle)?;
-        let debug_messenger = debug_messenger.defer(|debug_messenger| unsafe {
-            if let Some(debug_messenger) = debug_messenger {
-                instance
-                    .debug_utils()
-                    .destroy_debug_utils_messenger(debug_messenger, None);
-            }
-        });
+        let vulkan_library = unsafe { he42_vulkan::VulkanLibrary::new()? };
 
-        let surface_instance = instance.surface();
+        #[cfg(feature = "validation_layers")]
+        check_validation_layers(&vulkan_library)?;
+
+        let instance = create_instance(vulkan_library, display_handle)?;
+
+        #[cfg(feature = "validation_layers")]
+        let debug_messenger = create_debug_messenger(Arc::clone(&instance))?;
 
         let surface = unsafe {
             ash_window::create_surface(
@@ -56,7 +61,7 @@ impl VulkanContext {
                 window_handle,
                 None,
             )?
-            .defer(|surface| surface_instance.destroy_surface(surface, None))
+            .defer(|surface| instance.surface().destroy_surface(surface, None))
         };
 
         let physical_device_data =
@@ -64,10 +69,6 @@ impl VulkanContext {
         let device = unsafe { create_device(&instance, &physical_device_data)? }
             .defer(|device| unsafe { device.destroy_device(None) });
 
-        #[cfg(not(feature = "validation_layers"))]
-        {
-            let _ = ScopeGuard::into_inner(debug_messenger);
-        }
         Ok((
             VulkanContext {
                 device: ScopeGuard::into_inner(device),
@@ -77,8 +78,7 @@ impl VulkanContext {
                 physical_device: physical_device_data.physical_device,
                 surface: ScopeGuard::into_inner(surface),
                 #[cfg(feature = "validation_layers")]
-                debug_messenger: ScopeGuard::into_inner(debug_messenger)
-                    .expect("Debug messenger was not initialized"),
+                _debug_messenger: debug_messenger,
                 instance,
                 is_device_destroyed: false,
             },
@@ -185,12 +185,7 @@ impl VulkanContext {
         if !self.is_device_destroyed {
             self.destroy_device();
         }
-        #[cfg(feature = "validation_layers")]
-        {
-            self.instance()
-                .debug_utils()
-                .destroy_debug_utils_messenger(self.debug_messenger, None);
-        }
+
         self.instance()
             .surface()
             .destroy_surface(self.surface, None);

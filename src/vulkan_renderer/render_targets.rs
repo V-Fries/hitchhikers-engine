@@ -1,3 +1,4 @@
+mod create_color_buffer;
 mod create_depth_buffer;
 mod create_framebuffers;
 mod create_render_pass;
@@ -6,6 +7,7 @@ mod graphics_pipeline;
 mod image_views;
 
 use ash::{prelude::VkResult, vk};
+use create_color_buffer::create_color_buffer;
 use create_depth_buffer::create_depth_buffer;
 use create_framebuffers::create_framebuffers;
 use create_render_pass::create_render_pass;
@@ -39,6 +41,7 @@ pub struct RenderTargets {
     pipeline: vk::Pipeline,
 
     depth_buffer: Image,
+    color_buffer: Image,
 
     framebuffers: Box<[vk::Framebuffer]>,
 }
@@ -74,7 +77,7 @@ impl RenderTargets {
             });
 
         let (pipeline_layout, pipeline) = create_graphics_pipeline(
-            context.device(),
+            context,
             &swapchain_extent,
             *render_pass,
             *descriptor_set_layout,
@@ -86,6 +89,8 @@ impl RenderTargets {
         });
         let pipeline = pipeline.defer(|pipeline| context.device().destroy_pipeline(pipeline, None));
 
+        let color_buffer = create_color_buffer(context, swapchain_extent, swapchain_format)?
+            .defer(|mut depth_buffer| depth_buffer.destroy(context.device()));
         let depth_buffer = create_depth_buffer(context, swapchain_extent)?
             .defer(|mut depth_buffer| depth_buffer.destroy(context.device()));
 
@@ -95,11 +100,13 @@ impl RenderTargets {
             swapchain_extent,
             &swapchain_image_views,
             depth_buffer.image_view(),
+            color_buffer.image_view(),
         )?
         .defer(|framebuffers| Self::destroy_framebuffers(&framebuffers, context));
 
         Ok(RenderTargets {
             framebuffers: ScopeGuard::into_inner(framebuffers),
+            color_buffer: ScopeGuard::into_inner(color_buffer),
             depth_buffer: ScopeGuard::into_inner(depth_buffer),
             pipeline: ScopeGuard::into_inner(pipeline),
             pipeline_layout: ScopeGuard::into_inner(pipeline_layout),
@@ -205,6 +212,7 @@ impl RenderTargets {
         self.is_destroyed = true;
 
         Self::destroy_framebuffers(&self.framebuffers, context);
+        self.color_buffer.destroy(context.device());
         self.depth_buffer.destroy(context.device());
         context.device().destroy_pipeline(self.pipeline, None);
         context

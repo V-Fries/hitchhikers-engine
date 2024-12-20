@@ -27,6 +27,7 @@ pub struct VulkanContext {
     physical_device: vk::PhysicalDevice,
     physical_device_properties: vk::PhysicalDeviceProperties,
     physical_device_features: vk::PhysicalDeviceFeatures,
+    physical_device_max_sample_count: vk::SampleCountFlags,
     device: ash::Device,
     is_device_destroyed: bool,
 }
@@ -66,6 +67,7 @@ impl VulkanContext {
         Ok((
             VulkanContext {
                 device: ScopeGuard::into_inner(device),
+                physical_device_max_sample_count: physical_device_data.max_sample_count,
                 physical_device_features: physical_device_data.physical_device_features,
                 physical_device_properties: physical_device_data.physical_device_properties,
                 physical_device: physical_device_data.physical_device,
@@ -105,6 +107,7 @@ impl VulkanContext {
         physical_device: vk::PhysicalDevice,
         physical_device_properties: vk::PhysicalDeviceProperties,
         physical_device_features: vk::PhysicalDeviceFeatures,
+        physical_device_max_sample_count: vk::SampleCountFlags,
     ) {
         // TODO maybe make a Device struct that holds both those values?
 
@@ -117,6 +120,7 @@ impl VulkanContext {
         self.device = device;
         self.physical_device_properties = physical_device_properties;
         self.physical_device_features = physical_device_features;
+        self.physical_device_max_sample_count = physical_device_max_sample_count;
         self.is_device_destroyed = false;
     }
 
@@ -145,6 +149,15 @@ impl VulkanContext {
         );
 
         &self.physical_device_features
+    }
+
+    pub fn physical_device_max_sample_count(&self) -> vk::SampleCountFlags {
+        debug_assert!(
+            !self.is_device_destroyed,
+            "VulkanContext::physical_device_max_sample_count() was called after device destruction"
+        );
+
+        self.physical_device_max_sample_count
     }
 
     pub fn instance(&self) -> &ash::Instance {

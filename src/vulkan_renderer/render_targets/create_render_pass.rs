@@ -18,11 +18,15 @@ pub unsafe fn create_render_pass(
     let depth_attachment_reference = vk::AttachmentReference::default()
         .attachment(1)
         .layout(DEPTH_BUFFER_LAYOUT);
+    let color_attachment_resolve_reference = [vk::AttachmentReference::default()
+        .attachment(2)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
 
     let subpass = [vk::SubpassDescription::default()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
         .color_attachments(&color_attachment_references)
-        .depth_stencil_attachment(&depth_attachment_reference)];
+        .depth_stencil_attachment(&depth_attachment_reference)
+        .resolve_attachments(&color_attachment_resolve_reference)];
 
     let dependencies = get_dependencies();
 
@@ -41,20 +45,20 @@ pub unsafe fn create_render_pass(
 fn get_attachment_descriptions(
     context: &VulkanContext,
     swapchain_format: vk::Format,
-) -> Result<[vk::AttachmentDescription; 2]> {
+) -> Result<[vk::AttachmentDescription; 3]> {
     let color_attachment = vk::AttachmentDescription::default()
         .format(swapchain_format)
-        .samples(vk::SampleCountFlags::TYPE_1)
+        .samples(context.physical_device_max_sample_count())
         .load_op(vk::AttachmentLoadOp::CLEAR)
         .store_op(vk::AttachmentStoreOp::STORE)
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
+        .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
 
     let depth_attachment = vk::AttachmentDescription::default()
         .format(find_depth_buffer_format(context)?)
-        .samples(vk::SampleCountFlags::TYPE_1)
+        .samples(context.physical_device_max_sample_count())
         .load_op(vk::AttachmentLoadOp::CLEAR)
         .store_op(vk::AttachmentStoreOp::DONT_CARE)
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
@@ -62,7 +66,17 @@ fn get_attachment_descriptions(
         .initial_layout(vk::ImageLayout::UNDEFINED)
         .final_layout(DEPTH_BUFFER_LAYOUT);
 
-    Ok([color_attachment, depth_attachment])
+    let color_attachment_resolve = vk::AttachmentDescription::default()
+        .format(swapchain_format)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
+
+    Ok([color_attachment, depth_attachment, color_attachment_resolve])
 }
 
 fn get_dependencies() -> [vk::SubpassDependency; 1] {

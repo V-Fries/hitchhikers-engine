@@ -16,6 +16,7 @@ pub fn create_depth_buffer(
         context,
         ImageCreateInfo {
             mip_levels: 1,
+            sample_count: context.physical_device_max_sample_count(),
             extent: swapchain_extent,
             format: find_depth_buffer_format(context)?,
             tiling: vk::ImageTiling::OPTIMAL,

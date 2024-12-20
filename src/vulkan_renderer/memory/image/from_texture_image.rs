@@ -91,6 +91,7 @@ fn create_image(
         context,
         ImageCreateInfo {
             mip_levels,
+            sample_count: vk::SampleCountFlags::TYPE_1,
             extent: vk::Extent2D {
                 width: texture.width() as u32,
                 height: texture.height() as u32,

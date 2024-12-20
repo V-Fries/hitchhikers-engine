@@ -1,5 +1,6 @@
 use ash::vk;
-use he42_vulkan::VulkanLibrary;
+use he42_vulkan::{instance::Instance, VulkanLibrary};
+use rs42::extensions::PipeLine;
 use rs42::Result;
 
 use super::errors::ValidationLayerNotFound;
@@ -22,20 +23,22 @@ pub fn check_validation_layers(vulkan_library: &VulkanLibrary) -> Result<()> {
     Ok(())
 }
 
-fn get_set_of_available_validation_layers(vulkan_library: &VulkanLibrary) -> Result<HashSet<LayerName>> {
+fn get_set_of_available_validation_layers(
+    vulkan_library: &VulkanLibrary,
+) -> Result<HashSet<LayerName>> {
     unsafe { vulkan_library.enumerate_instance_layer_properties()? }
         .into_iter()
         .map::<Result<String>, _>(|elem| Ok(elem.layer_name_as_c_str()?.to_str()?.to_string()))
         .collect()
 }
 
-pub fn create_debug_messenger(
-    vulkan_library: &VulkanLibrary,
-    instance: &ash::Instance,
-) -> Result<vk::DebugUtilsMessengerEXT> {
-    let create_info = get_debug_utils_messenger_create_info();
-    let debug_utils = ash::ext::debug_utils::Instance::new(vulkan_library, instance);
-    unsafe { Ok(debug_utils.create_debug_utils_messenger(&create_info, None)?) }
+pub fn create_debug_messenger(instance: &Instance) -> Result<vk::DebugUtilsMessengerEXT> {
+    unsafe {
+        instance
+            .debug_utils()
+            .create_debug_utils_messenger(&get_debug_utils_messenger_create_info(), None)?
+    }
+    .pipe(Ok)
 }
 
 fn get_debug_utils_messenger_create_info<'a>() -> vk::DebugUtilsMessengerCreateInfoEXT<'a> {

@@ -383,7 +383,7 @@ impl VulkanRenderer {
         if let Ok(swapchain_builder) = SwapchainBuilder::new(
             self.context.physical_device(),
             self.interface.queue_families(),
-            self.context.surface_instance(),
+            self.context.instance(),
             self.context.surface(),
             window_inner_size,
         ) {
@@ -395,7 +395,6 @@ impl VulkanRenderer {
         self.context.destroy_device();
 
         let physical_device_data = PhysicalDeviceData::new(
-            self.context.surface_instance(),
             self.context.instance(),
             self.context.surface(),
             window_inner_size,

@@ -1,5 +1,6 @@
 use ash::prelude::VkResult;
 use ash::vk;
+use he42_vulkan::instance::Instance;
 use std::collections::HashSet;
 
 use crate::vulkan_renderer::vulkan_context::errors::PhysicalDeviceIsNotSuitable;
@@ -40,16 +41,19 @@ impl SwapchainBuilder {
     pub fn new(
         device: vk::PhysicalDevice,
         queue_family: QueueFamilies,
-        surface_instance: &ash::khr::surface::Instance,
+        instance: &Instance,
         surface: vk::SurfaceKHR,
         window_inner_size: winit::dpi::PhysicalSize<u32>,
     ) -> Result<Self> {
-        let capabilities =
-            unsafe { surface_instance.get_physical_device_surface_capabilities(device, surface)? };
+        let capabilities = unsafe {
+            instance
+                .surface()
+                .get_physical_device_surface_capabilities(device, surface)?
+        };
         Ok(Self {
             capabilities,
-            format: Self::choose_surface_format(surface_instance, device, surface)?,
-            present_mode: Self::choose_present_mode(surface_instance, device, surface)?,
+            format: Self::choose_surface_format(instance, device, surface)?,
+            present_mode: Self::choose_present_mode(instance, device, surface)?,
             extent: Self::choose_extent(capabilities, window_inner_size),
             image_count: Self::choose_image_count(capabilities)?,
             queues_working_on_images: [queue_family.present_index, queue_family.graphics_index],
@@ -106,11 +110,11 @@ impl SwapchainBuilder {
     }
 
     fn choose_surface_format(
-        surface_instance: &ash::khr::surface::Instance,
+        instance: &Instance,
         device: vk::PhysicalDevice,
         surface: vk::SurfaceKHR,
     ) -> Result<vk::SurfaceFormatKHR> {
-        let formats = Self::get_set_of_available_formats(surface_instance, device, surface)?;
+        let formats = Self::get_set_of_available_formats(instance, device, surface)?;
 
         for format in PREFERRED_FORMATS.iter() {
             if formats.contains(format) {
@@ -133,12 +137,15 @@ impl SwapchainBuilder {
     }
 
     fn get_set_of_available_formats(
-        surface_instance: &ash::khr::surface::Instance,
+        instance: &Instance,
         device: vk::PhysicalDevice,
         surface: vk::SurfaceKHR,
     ) -> Result<HashSet<vk::SurfaceFormatKHR>> {
-        let vec_of_available_formats =
-            unsafe { surface_instance.get_physical_device_surface_formats(device, surface)? };
+        let vec_of_available_formats = unsafe {
+            instance
+                .surface()
+                .get_physical_device_surface_formats(device, surface)?
+        };
 
         vec_of_available_formats
             .into_iter()
@@ -147,11 +154,11 @@ impl SwapchainBuilder {
     }
 
     fn choose_present_mode(
-        surface_instance: &ash::khr::surface::Instance,
+        instance: &Instance,
         device: vk::PhysicalDevice,
         surface: vk::SurfaceKHR,
     ) -> Result<vk::PresentModeKHR> {
-        let formats = Self::get_set_of_available_present_modes(surface_instance, device, surface)?;
+        let formats = Self::get_set_of_available_present_modes(instance, device, surface)?;
 
         for format in PREFERRED_PRESENTATION_MODES.iter() {
             if formats.contains(format) {
@@ -174,12 +181,15 @@ impl SwapchainBuilder {
     }
 
     fn get_set_of_available_present_modes(
-        surface_instance: &ash::khr::surface::Instance,
+        instance: &Instance,
         device: vk::PhysicalDevice,
         surface: vk::SurfaceKHR,
     ) -> Result<HashSet<vk::PresentModeKHR>> {
-        let vec_of_available_formats =
-            unsafe { surface_instance.get_physical_device_surface_present_modes(device, surface)? };
+        let vec_of_available_formats = unsafe {
+            instance
+                .surface()
+                .get_physical_device_surface_present_modes(device, surface)?
+        };
 
         vec_of_available_formats
             .into_iter()

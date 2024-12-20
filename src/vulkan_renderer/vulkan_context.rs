@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use ash::{prelude::VkResult, vk};
 pub use device::{create_device, PhysicalDeviceData, SwapchainBuilder};
-use he42_vulkan::VulkanLibrary;
+use he42_vulkan::instance::Instance;
 use instance::create_instance;
 pub use queue_families::QueueFamilies;
 use rs42::{
@@ -18,15 +18,12 @@ use rs42::{
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 pub struct VulkanContext {
-    #[allow(dead_code)]
-    vulkan_library: Arc<VulkanLibrary>,
-    instance: ash::Instance,
+    instance: Arc<Instance>,
 
     #[cfg(feature = "validation_layers")]
     debug_messenger: vk::DebugUtilsMessengerEXT,
 
     surface: vk::SurfaceKHR,
-    surface_instance: ash::khr::surface::Instance,
     physical_device: vk::PhysicalDevice,
     physical_device_properties: vk::PhysicalDeviceProperties,
     physical_device_features: vk::PhysicalDeviceFeatures,
@@ -40,23 +37,21 @@ impl VulkanContext {
         let display_handle = window.display_handle()?.into();
         let window_handle = window.window_handle()?.into();
 
-        let vulkan_library = unsafe { VulkanLibrary::new()? };
-
-        let (instance, debug_messenger) = create_instance(Arc::clone(&vulkan_library), display_handle)?;
-        let instance = instance.defer(|instance| unsafe { instance.destroy_instance(None) });
+        let (instance, debug_messenger) = create_instance(display_handle)?;
         let debug_messenger = debug_messenger.defer(|debug_messenger| unsafe {
             if let Some(debug_messenger) = debug_messenger {
-                ash::ext::debug_utils::Instance::new(&vulkan_library, &instance)
+                instance
+                    .debug_utils()
                     .destroy_debug_utils_messenger(debug_messenger, None);
             }
         });
 
-        let surface_instance = ash::khr::surface::Instance::new(&vulkan_library, &instance);
+        let surface_instance = instance.surface();
 
         let surface = unsafe {
             ash_window::create_surface(
-                &vulkan_library,
-                &instance,
+                instance.vulkan_library(),
+                instance.raw_instance(),
                 display_handle,
                 window_handle,
                 None,
@@ -65,7 +60,7 @@ impl VulkanContext {
         };
 
         let physical_device_data =
-            PhysicalDeviceData::new(&surface_instance, &instance, *surface, window.inner_size())?;
+            PhysicalDeviceData::new(&instance, *surface, window.inner_size())?;
         let device = unsafe { create_device(&instance, &physical_device_data)? }
             .defer(|device| unsafe { device.destroy_device(None) });
 
@@ -81,12 +76,10 @@ impl VulkanContext {
                 physical_device_properties: physical_device_data.physical_device_properties,
                 physical_device: physical_device_data.physical_device,
                 surface: ScopeGuard::into_inner(surface),
-                surface_instance,
                 #[cfg(feature = "validation_layers")]
                 debug_messenger: ScopeGuard::into_inner(debug_messenger)
                     .expect("Debug messenger was not initialized"),
-                instance: ScopeGuard::into_inner(instance),
-                vulkan_library,
+                instance,
                 is_device_destroyed: false,
             },
             physical_device_data.queue_families,
@@ -169,16 +162,12 @@ impl VulkanContext {
         self.physical_device_max_sample_count
     }
 
-    pub fn instance(&self) -> &ash::Instance {
+    pub fn instance(&self) -> &Instance {
         &self.instance
     }
 
     pub fn surface(&self) -> vk::SurfaceKHR {
         self.surface
-    }
-
-    pub fn surface_instance(&self) -> &ash::khr::surface::Instance {
-        &self.surface_instance
     }
 
     pub unsafe fn destroy_device(&mut self) {
@@ -198,10 +187,12 @@ impl VulkanContext {
         }
         #[cfg(feature = "validation_layers")]
         {
-            ash::ext::debug_utils::Instance::new(&self.vulkan_library, &self.instance)
+            self.instance()
+                .debug_utils()
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
-        self.surface_instance.destroy_surface(self.surface, None);
-        self.instance.destroy_instance(None);
+        self.instance()
+            .surface()
+            .destroy_surface(self.surface, None);
     }
 }

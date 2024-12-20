@@ -4,6 +4,7 @@ mod swapchain_builder;
 use ash::vk;
 use std::ffi::c_char;
 
+use he42_vulkan::instance::Instance;
 pub use physical_device::PhysicalDeviceData;
 use rs42::{extensions::PipeLine, Result};
 pub use swapchain_builder::SwapchainBuilder;
@@ -15,7 +16,7 @@ pub const REQUIRED_EXTENSIONS: &[*const c_char] = &[
 ];
 
 pub unsafe fn create_device(
-    instance: &ash::Instance,
+    instance: &Instance,
     device_data: &PhysicalDeviceData,
 ) -> Result<ash::Device> {
     let queue_priority = [1.];

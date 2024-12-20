@@ -3,7 +3,7 @@ use super::validation_layers::VALIDATION_LAYERS;
 use super::validation_layers::{check_validation_layers, create_debug_messenger};
 use crate::engine::{ENGINE_NAME_CSTR, ENGINE_VERSION};
 use ash::vk;
-use he42_vulkan::VulkanLibrary;
+use he42_vulkan::{instance::Instance, VulkanLibrary};
 use rs42::{
     scope_guard::{Defer, ScopeGuard},
     Result,
@@ -23,9 +23,10 @@ const REQUIRED_EXTENSIONS: &[&CStr] = &[
 ];
 
 pub fn create_instance(
-    vulkan_library: Arc<VulkanLibrary>,
     display_handle: RawDisplayHandle,
-) -> Result<(ash::Instance, Option<vk::DebugUtilsMessengerEXT>)> {
+) -> Result<(Arc<Instance>, Option<vk::DebugUtilsMessengerEXT>)> {
+    let vulkan_library = unsafe { VulkanLibrary::new()? };
+
     if cfg!(feature = "validation_layers") {
         check_validation_layers(&vulkan_library)?;
     }
@@ -33,11 +34,11 @@ pub fn create_instance(
     let required_extensions = get_required_extensions(&vulkan_library, display_handle)?;
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
-    let instance = unsafe { vulkan_library.create_instance(&create_info, None)? }
+    let instance = unsafe { Instance::new(vulkan_library, create_info)? }
         .defer(|instance| unsafe { instance.destroy_instance(None) });
 
     if cfg!(feature = "validation_layers") {
-        let debug_messenger = create_debug_messenger(&vulkan_library, &instance)?;
+        let debug_messenger = create_debug_messenger(&instance)?;
         return Ok((ScopeGuard::into_inner(instance), Some(debug_messenger)));
     }
     Ok((ScopeGuard::into_inner(instance), None))
@@ -71,7 +72,9 @@ fn check_extensions_support(
     Ok(())
 }
 
-fn get_set_of_available_extensions(vulkan_library: &VulkanLibrary) -> Result<HashSet<ExtensionName>> {
+fn get_set_of_available_extensions(
+    vulkan_library: &VulkanLibrary,
+) -> Result<HashSet<ExtensionName>> {
     unsafe { vulkan_library.enumerate_instance_extension_properties(None)? }
         .into_iter()
         .map(|elem| Ok(elem.extension_name_as_c_str()?.into()))

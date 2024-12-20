@@ -1,4 +1,5 @@
 use ash::vk;
+use he42_vulkan::VulkanLibrary;
 use rs42::Result;
 
 use super::errors::ValidationLayerNotFound;
@@ -9,8 +10,8 @@ type LayerName = String;
 
 pub const VALIDATION_LAYERS: &[*const c_char] = &[c"VK_LAYER_KHRONOS_validation".as_ptr()];
 
-pub fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
-    let available_layers = get_set_of_available_validation_layers(entry)?;
+pub fn check_validation_layers(vulkan_library: &VulkanLibrary) -> Result<()> {
+    let available_layers = get_set_of_available_validation_layers(vulkan_library)?;
 
     for layer in VALIDATION_LAYERS {
         let layer = unsafe { CStr::from_ptr(*layer) };
@@ -21,19 +22,19 @@ pub fn check_validation_layers(entry: &ash::Entry) -> Result<()> {
     Ok(())
 }
 
-fn get_set_of_available_validation_layers(entry: &ash::Entry) -> Result<HashSet<LayerName>> {
-    unsafe { entry.enumerate_instance_layer_properties()? }
+fn get_set_of_available_validation_layers(vulkan_library: &VulkanLibrary) -> Result<HashSet<LayerName>> {
+    unsafe { vulkan_library.enumerate_instance_layer_properties()? }
         .into_iter()
         .map::<Result<String>, _>(|elem| Ok(elem.layer_name_as_c_str()?.to_str()?.to_string()))
         .collect()
 }
 
 pub fn create_debug_messenger(
-    entry: &ash::Entry,
+    vulkan_library: &VulkanLibrary,
     instance: &ash::Instance,
 ) -> Result<vk::DebugUtilsMessengerEXT> {
     let create_info = get_debug_utils_messenger_create_info();
-    let debug_utils = ash::ext::debug_utils::Instance::new(entry, instance);
+    let debug_utils = ash::ext::debug_utils::Instance::new(vulkan_library, instance);
     unsafe { Ok(debug_utils.create_debug_utils_messenger(&create_info, None)?) }
 }
 

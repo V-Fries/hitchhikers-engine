@@ -8,6 +8,7 @@ members = [
     "crates/linear-algebra",
     "crates/image-parser",
     "crates/model",
+    "crates/he42-vulkan",
 ]
 
 [features]
@@ -17,11 +18,12 @@ validation_layers = []
 linear-algebra = { path = "./crates/linear-algebra" }
 image-parser = { path = "./crates/image-parser" }
 model = { path = "./crates/model" }
+he42-vulkan = { path = "./crates/he42-vulkan" }
 
 # Utilities
 rs42 = "0.2.0"
 
-# Vulkan wrapper
+# TODO replace this with he42-vulkan
 ash = "0.38.0"
 
 # Window

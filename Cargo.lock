@@ -407,6 +407,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
+name = "he42-vulkan"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "rs42",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -418,6 +426,7 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "ash-window",
+ "he42-vulkan",
  "image-parser",
  "linear-algebra",
  "model",

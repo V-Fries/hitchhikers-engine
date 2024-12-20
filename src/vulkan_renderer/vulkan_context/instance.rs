@@ -3,6 +3,7 @@ use super::validation_layers::VALIDATION_LAYERS;
 use super::validation_layers::{check_validation_layers, create_debug_messenger};
 use crate::engine::{ENGINE_NAME_CSTR, ENGINE_VERSION};
 use ash::vk;
+use he42_vulkan::VulkanLibrary;
 use rs42::{
     scope_guard::{Defer, ScopeGuard},
     Result,
@@ -10,6 +11,7 @@ use rs42::{
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr, CString};
+use std::sync::Arc;
 use winit::raw_window_handle::RawDisplayHandle;
 
 type ExtensionName = CString;
@@ -21,28 +23,28 @@ const REQUIRED_EXTENSIONS: &[&CStr] = &[
 ];
 
 pub fn create_instance(
-    entry: &ash::Entry,
+    vulkan_library: Arc<VulkanLibrary>,
     display_handle: RawDisplayHandle,
 ) -> Result<(ash::Instance, Option<vk::DebugUtilsMessengerEXT>)> {
     if cfg!(feature = "validation_layers") {
-        check_validation_layers(entry)?;
+        check_validation_layers(&vulkan_library)?;
     }
 
-    let required_extensions = get_required_extensions(entry, display_handle)?;
+    let required_extensions = get_required_extensions(&vulkan_library, display_handle)?;
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
-    let instance = unsafe { entry.create_instance(&create_info, None)? }
+    let instance = unsafe { vulkan_library.create_instance(&create_info, None)? }
         .defer(|instance| unsafe { instance.destroy_instance(None) });
 
     if cfg!(feature = "validation_layers") {
-        let debug_messenger = create_debug_messenger(entry, &instance)?;
+        let debug_messenger = create_debug_messenger(&vulkan_library, &instance)?;
         return Ok((ScopeGuard::into_inner(instance), Some(debug_messenger)));
     }
     Ok((ScopeGuard::into_inner(instance), None))
 }
 
 fn get_required_extensions(
-    entry: &ash::Entry,
+    vulkan_library: &VulkanLibrary,
     display_handle: RawDisplayHandle,
 ) -> Result<Vec<*const c_char>> {
     let mut required_extensions = REQUIRED_EXTENSIONS
@@ -51,15 +53,15 @@ fn get_required_extensions(
         .collect::<Vec<*const c_char>>();
     required_extensions.extend(ash_window::enumerate_required_extensions(display_handle)?);
 
-    check_extensions_support(entry, &required_extensions)?;
+    check_extensions_support(vulkan_library, &required_extensions)?;
     Ok(required_extensions)
 }
 
 fn check_extensions_support(
-    entry: &ash::Entry,
+    vulkan_library: &VulkanLibrary,
     required_extensions: &[*const c_char],
 ) -> Result<()> {
-    let available_extensions = get_set_of_available_extensions(entry)?;
+    let available_extensions = get_set_of_available_extensions(vulkan_library)?;
     for extension in required_extensions.iter() {
         let extension = unsafe { CStr::from_ptr(*extension) };
         if !available_extensions.contains(extension) {
@@ -69,8 +71,8 @@ fn check_extensions_support(
     Ok(())
 }
 
-fn get_set_of_available_extensions(entry: &ash::Entry) -> Result<HashSet<ExtensionName>> {
-    unsafe { entry.enumerate_instance_extension_properties(None)? }
+fn get_set_of_available_extensions(vulkan_library: &VulkanLibrary) -> Result<HashSet<ExtensionName>> {
+    unsafe { vulkan_library.enumerate_instance_extension_properties(None)? }
         .into_iter()
         .map(|elem| Ok(elem.extension_name_as_c_str()?.into()))
         .collect()

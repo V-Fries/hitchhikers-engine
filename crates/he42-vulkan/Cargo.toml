@@ -1,0 +1,8 @@
+[package]
+name = "he42-vulkan"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rs42 = "0.2.0"
+ash = "0.38.0"

@@ -34,14 +34,13 @@ pub fn create_instance(
     let required_extensions = get_required_extensions(&vulkan_library, display_handle)?;
     let app_info = get_app_info();
     let create_info = get_create_info(&required_extensions, &app_info);
-    let instance = unsafe { Instance::new(vulkan_library, create_info)? }
-        .defer(|instance| unsafe { instance.destroy_instance(None) });
+    let instance = unsafe { Instance::new(vulkan_library, create_info)? };
 
     if cfg!(feature = "validation_layers") {
         let debug_messenger = create_debug_messenger(&instance)?;
-        return Ok((ScopeGuard::into_inner(instance), Some(debug_messenger)));
+        return Ok((instance, Some(debug_messenger)));
     }
-    Ok((ScopeGuard::into_inner(instance), None))
+    Ok((instance, None))
 }
 
 fn get_required_extensions(

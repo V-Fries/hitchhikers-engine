@@ -406,6 +406,7 @@ impl VulkanRenderer {
             physical_device_data.physical_device,
             physical_device_data.physical_device_properties,
             physical_device_data.physical_device_features,
+            physical_device_data.max_sample_count,
         );
 
         self.interface = VulkanInterface::new(&self.context, physical_device_data.queue_families)?;

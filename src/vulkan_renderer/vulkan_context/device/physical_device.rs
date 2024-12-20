@@ -17,6 +17,7 @@ pub struct PhysicalDeviceData {
     pub physical_device: vk::PhysicalDevice,
     pub physical_device_properties: vk::PhysicalDeviceProperties,
     pub physical_device_features: vk::PhysicalDeviceFeatures,
+    pub max_sample_count: vk::SampleCountFlags,
     pub queue_families: QueueFamilies,
     pub swapchain_builder: SwapchainBuilder,
 }
@@ -69,6 +70,8 @@ impl ScoredPhysicalDeviceData {
     ) -> Result<ScoredPhysicalDeviceData> {
         let device_properties = unsafe { instance.get_physical_device_properties(device) };
         let device_features = unsafe { instance.get_physical_device_features(device) };
+        let (max_sample_count, sample_count_score) =
+            Self::get_max_usable_sample_count(device_properties);
         let queue_families =
             Self::find_queue_families(instance, surface_instance, surface, device)?;
 
@@ -82,13 +85,14 @@ impl ScoredPhysicalDeviceData {
             window_inner_size,
         )?;
 
-        let score = Self::score_device(device_properties, device_features);
+        let score = Self::score_device(device_properties, device_features, sample_count_score);
 
         Ok(ScoredPhysicalDeviceData {
             physical_device_data: PhysicalDeviceData {
                 physical_device: device,
                 physical_device_properties: device_properties,
                 physical_device_features: device_features,
+                max_sample_count,
                 queue_families,
                 swapchain_builder,
             },
@@ -136,6 +140,7 @@ impl ScoredPhysicalDeviceData {
     fn score_device(
         device_properties: vk::PhysicalDeviceProperties,
         device_features: vk::PhysicalDeviceFeatures,
+        sample_count_score: DeviceScore,
     ) -> DeviceScore {
         let mut score = DeviceScore(0);
 
@@ -146,7 +151,7 @@ impl ScoredPhysicalDeviceData {
             score.0 += 100;
         }
 
-        score
+        DeviceScore(score.0 + sample_count_score.0)
     }
 
     fn find_queue_families(
@@ -181,5 +186,37 @@ impl ScoredPhysicalDeviceData {
                 },
             )?
             .build(device)
+    }
+
+    fn get_max_usable_sample_count(
+        device_properties: vk::PhysicalDeviceProperties,
+    ) -> (vk::SampleCountFlags, DeviceScore) {
+        let counts = device_properties.limits.framebuffer_color_sample_counts
+            & device_properties.limits.framebuffer_depth_sample_counts;
+
+        let is_supported = |test_counts| counts & test_counts != vk::SampleCountFlags::empty();
+
+        if is_supported(vk::SampleCountFlags::TYPE_64) {
+            return (vk::SampleCountFlags::TYPE_64, DeviceScore(64));
+        }
+        if is_supported(vk::SampleCountFlags::TYPE_32) {
+            return (vk::SampleCountFlags::TYPE_32, DeviceScore(32));
+        }
+        if is_supported(vk::SampleCountFlags::TYPE_16) {
+            return (vk::SampleCountFlags::TYPE_16, DeviceScore(16));
+        }
+        if is_supported(vk::SampleCountFlags::TYPE_8) {
+            return (vk::SampleCountFlags::TYPE_8, DeviceScore(8));
+        }
+        if is_supported(vk::SampleCountFlags::TYPE_8) {
+            return (vk::SampleCountFlags::TYPE_8, DeviceScore(8));
+        }
+        if is_supported(vk::SampleCountFlags::TYPE_4) {
+            return (vk::SampleCountFlags::TYPE_4, DeviceScore(4));
+        }
+        if is_supported(vk::SampleCountFlags::TYPE_2) {
+            return (vk::SampleCountFlags::TYPE_2, DeviceScore(2));
+        }
+        (vk::SampleCountFlags::TYPE_1, DeviceScore(1))
     }
 }
